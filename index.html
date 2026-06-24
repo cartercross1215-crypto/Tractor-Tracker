@@ -9,9 +9,14 @@
   <meta name="apple-mobile-web-app-title" content="Tractor Tracker" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Tractor Tracker</title>
-  <link rel="manifest" href="manifest.webmanifest?v=21" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png?v=21" />
-  <link rel="stylesheet" href="styles.css?v=21" />
+  <link rel="manifest" href="manifest.webmanifest?v=23" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png" />
+  <link rel="apple-touch-icon" sizes="167x167" href="icons/apple-touch-icon-167.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="icons/apple-touch-icon-152.png" />
+  <link rel="stylesheet" href="styles.css?v=23" />
 </head>
 <body>
   <section id="account-chooser" class="account-chooser" hidden>
@@ -35,6 +40,7 @@
         <label>Password<input id="startup-login-password" type="password" required /></label>
         <div class="form-actions full-width">
           <button type="submit">Log In and Sync</button>
+          <button id="startup-forgot-password" type="button" class="ghost-button">Forgot Password</button>
         </div>
       </form>
       <form id="startup-register-form" class="form-grid compact-form startup-account-form" hidden>
@@ -50,6 +56,22 @@
       </div>
       <p id="startup-cloud-message" class="message" aria-live="polite"></p>
     </div>
+  </section>
+
+  <section id="password-reset-screen" class="account-chooser" hidden>
+    <form id="reset-password-form" class="account-card" aria-labelledby="reset-title">
+      <p class="eyebrow">Password reset</p>
+      <h2 id="reset-title">Set a new password</h2>
+      <p>Enter a new password for your Tractor Tracker account.</p>
+      <div class="form-grid compact-form">
+        <label>New password<input id="reset-new-password" type="password" minlength="8" required /></label>
+        <label>Confirm password<input id="reset-confirm-password" type="password" minlength="8" required /></label>
+        <div class="form-actions full-width">
+          <button type="submit">Change Password</button>
+        </div>
+      </div>
+      <p id="reset-message" class="message" aria-live="polite"></p>
+    </form>
   </section>
 
   <section id="mode-chooser" class="mode-chooser" hidden>
@@ -408,26 +430,26 @@
       <section class="panel">
         <div class="section-heading">
           <div>
-            <h2>Subscription</h2>
-            <p id="subscription-status">Free plan is active.</p>
+            <h2>Free Beta</h2>
+            <p id="subscription-status">Free Beta is active.</p>
           </div>
-          <span class="status-pill" id="subscription-price">$0/month</span>
+          <span class="status-pill" id="subscription-price">Beta</span>
         </div>
         <div class="plan-grid">
           <article class="plan-card" id="free-plan-card">
-            <span>Free</span>
+            <span>Free Beta</span>
             <strong>$0/month</strong>
-            <p>One machine, one operator, five fields or job sites, local storage, and basic reports.</p>
-            <button id="use-free-plan" type="button" class="secondary-button">Use Free Plan</button>
+            <p>One machine, one operator, five fields or job sites, cloud account sync during beta, and basic reports.</p>
+            <button id="use-free-plan" type="button" class="secondary-button">Free Beta Active</button>
           </article>
-          <article class="plan-card" id="farm-plan-card">
+          <article class="plan-card" id="farm-plan-card" hidden>
             <span>Unlimited</span>
             <strong>$9.99/month</strong>
-            <p>Unlimited machines, fields, operators, cloud backup, device syncing, advanced reports, and full export tools.</p>
-            <button id="activate-farm-plan" type="button">Activate Unlimited</button>
+            <p>Unlimited memberships are coming later after beta testing.</p>
+            <button id="activate-farm-plan" type="button" hidden disabled>Activate Unlimited</button>
           </article>
         </div>
-        <p class="muted-text">Payment processing is not connected yet. This switch sets the plan level for testing the subscription limits.</p>
+        <p class="muted-text">Payments are not connected during beta. Unlimited memberships will be added later with real server-side billing.</p>
       </section>
 
       <div class="layout-two">
@@ -455,6 +477,7 @@
             <label>Password<input id="login-password" type="password" required /></label>
             <div class="form-actions full-width">
               <button type="submit">Log In</button>
+              <button id="forgot-password" type="button" class="ghost-button">Forgot Password</button>
             </div>
           </form>
           <p id="cloud-message" class="message" aria-live="polite"></p>
@@ -473,10 +496,21 @@
             <button id="download-cloud" type="button" class="secondary-button" disabled>Download Cloud Copy</button>
           </div>
         </section>
+
+        <section class="panel">
+          <h2>Change Password</h2>
+          <form id="change-password-form" class="form-grid compact-form">
+            <label>Current password<input id="current-password" type="password" required /></label>
+            <label>New password<input id="new-password" type="password" minlength="8" required /></label>
+            <div class="form-actions full-width">
+              <button type="submit">Change Password</button>
+            </div>
+          </form>
+        </section>
       </div>
     </section>
   </main>
 
-  <script src="app.js?v=21"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>

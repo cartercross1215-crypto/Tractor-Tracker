@@ -1,12 +1,16 @@
-const CACHE_NAME = "tractor-tracker-v21";
+const CACHE_NAME = "tractor-tracker-v23";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=21",
-  "./app.js?v=21",
-  "./manifest.webmanifest?v=21",
-  "./icons/icon-192.png?v=21",
-  "./icons/icon-512.png?v=21"
+  "./styles.css?v=23",
+  "./app.js?v=23",
+  "./manifest.webmanifest?v=23",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png",
+  "./icons/apple-touch-icon.png",
+  "./icons/apple-touch-icon-180.png",
+  "./icons/apple-touch-icon-167.png",
+  "./icons/apple-touch-icon-152.png"
 ];
 
 self.addEventListener("install", (event) => {

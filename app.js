@@ -15,8 +15,8 @@ const STORAGE_KEYS = {
 
 const SUBSCRIPTION_PLANS = {
   free: {
-    name: "Free",
-    price: "$0/month",
+    name: "Free Beta",
+    price: "Beta",
     limits: {
       equipment: 1,
       operators: 1,
@@ -149,6 +149,7 @@ const state = {
 let autoSyncTimer = null;
 let isAutoSyncing = false;
 let suppressSyncTracking = false;
+let passwordResetToken = new URLSearchParams(window.location.search).get("reset");
 
 const elements = {
   tabs: document.querySelectorAll(".tab"),
@@ -166,6 +167,8 @@ const elements = {
   loginForm: document.querySelector("#login-form"),
   startupLoginForm: document.querySelector("#startup-login-form"),
   startupRegisterForm: document.querySelector("#startup-register-form"),
+  resetPasswordForm: document.querySelector("#reset-password-form"),
+  changePasswordForm: document.querySelector("#change-password-form"),
   equipmentDisplay: document.querySelector("#equipment-display"),
   fieldList: document.querySelector("#field-list"),
   customerList: document.querySelector("#customer-list"),
@@ -246,11 +249,19 @@ Object.assign(elements, {
   modeChooser: document.querySelector("#mode-chooser"),
   accountChooser: document.querySelector("#account-chooser"),
   startupCloudMessage: document.querySelector("#startup-cloud-message"),
+  resetPasswordScreen: document.querySelector("#password-reset-screen"),
+  resetMessage: document.querySelector("#reset-message"),
   startupLoginEmail: document.querySelector("#startup-login-email"),
   startupLoginPassword: document.querySelector("#startup-login-password"),
+  startupForgotPassword: document.querySelector("#startup-forgot-password"),
   startupRegisterFarm: document.querySelector("#startup-register-farm"),
   startupRegisterEmail: document.querySelector("#startup-register-email"),
   startupRegisterPassword: document.querySelector("#startup-register-password"),
+  resetNewPassword: document.querySelector("#reset-new-password"),
+  resetConfirmPassword: document.querySelector("#reset-confirm-password"),
+  forgotPassword: document.querySelector("#forgot-password"),
+  currentPassword: document.querySelector("#current-password"),
+  newPassword: document.querySelector("#new-password"),
   continueLocal: document.querySelector("#continue-local"),
   setupWizard: document.querySelector("#setup-wizard"),
   appMode: document.querySelector("#app-mode"),
@@ -362,7 +373,7 @@ function normalizeSettings(settings = {}) {
     accountPromptComplete: Boolean(settings.accountPromptComplete),
     setupComplete: Boolean(settings.setupComplete),
     businessName: settings.businessName || "",
-    subscriptionPlan: settings.subscriptionPlan === "farm" ? "farm" : "free",
+    subscriptionPlan: "free",
     measurementSystem: settings.measurementSystem || "us",
     currency: settings.currency || "USD"
   };
@@ -397,6 +408,10 @@ function shouldShowSetupWizard() {
 
 function shouldShowAccountChooser() {
   return Boolean(!state.cloudSession?.token && !state.settings.accountPromptComplete);
+}
+
+function shouldShowPasswordResetScreen() {
+  return Boolean(passwordResetToken);
 }
 
 function getActivePlanKey() {
@@ -550,6 +565,11 @@ function showCloudMessage(text, type = "") {
 function showStartupCloudMessage(text, type = "") {
   elements.startupCloudMessage.textContent = text;
   elements.startupCloudMessage.className = `message ${type}`;
+}
+
+function showResetMessage(text, type = "") {
+  elements.resetMessage.textContent = text;
+  elements.resetMessage.className = `message ${type}`;
 }
 
 function showPlanUpgrade(featureName) {
@@ -884,6 +904,22 @@ async function createCloudAccount({ farmName, email, password }) {
   return payload;
 }
 
+async function requestPasswordReset(email, showMessage) {
+  const accountEmail = (email || "").trim();
+
+  if (!accountEmail) {
+    showMessage("Enter your account email first.", "error");
+    return;
+  }
+
+  const payload = await cloudRequest("/api/password/forgot", {
+    method: "POST",
+    body: JSON.stringify({ email: accountEmail })
+  });
+
+  showMessage(payload.message, payload.emailConfigured === false ? "error" : "success");
+}
+
 function renderCloudAccount() {
   const session = state.cloudSession;
   const isConnected = Boolean(session?.token);
@@ -900,6 +936,7 @@ function renderCloudAccount() {
   elements.downloadCloud.disabled = !isConnected || !canSync;
   elements.registerForm.hidden = isConnected;
   elements.loginForm.hidden = isConnected;
+  elements.changePasswordForm.hidden = !isConnected;
 
   if (!registerFarm.value) {
     registerFarm.value = state.settings.businessName || "Home Farm";
@@ -907,14 +944,13 @@ function renderCloudAccount() {
 }
 
 function renderSubscriptionPlan() {
-  const planKey = getActivePlanKey();
-  const plan = getActivePlan();
-  elements.subscriptionPrice.textContent = plan.price;
-  elements.subscriptionStatus.textContent = `${plan.name} plan is active. ${planKey === "farm" ? "Unlimited equipment, operators, and sites are unlocked." : "Cloud account sync is available while payments are being built. Upgrade to Unlimited for unlimited records, advanced reports, and full export tools."}`;
-  elements.freePlanCard.classList.toggle("active-plan", planKey === "free");
-  elements.farmPlanCard.classList.toggle("active-plan", planKey === "farm");
-  elements.useFreePlan.disabled = planKey === "free";
-  elements.activateFarmPlan.disabled = planKey === "farm";
+  elements.subscriptionPrice.textContent = "Beta";
+  elements.subscriptionStatus.textContent = "Free Beta is active. Cloud account sync is available while payments and memberships are being built.";
+  elements.freePlanCard.classList.add("active-plan");
+  elements.farmPlanCard.hidden = true;
+  elements.activateFarmPlan.hidden = true;
+  elements.useFreePlan.disabled = true;
+  elements.activateFarmPlan.disabled = true;
   elements.exportCsv.disabled = !hasPlanFeature("exportTools");
   elements.exportMaintenanceCsv.disabled = !hasPlanFeature("exportTools");
   elements.downloadBackup.disabled = !hasPlanFeature("exportTools");
@@ -967,14 +1003,16 @@ function renderAppModeContent() {
   const fieldLimit = getPlanLimit("fields");
   const selectedDistanceUnit = elements.jobDistanceUnit.value || getPreferredDistanceUnit();
   const distanceUnit = unitLabel(selectedDistanceUnit);
+  const passwordResetNeeded = shouldShowPasswordResetScreen();
   const accountChoiceNeeded = shouldShowAccountChooser();
   const modeWasChosen = Boolean(state.settings.appMode);
 
   document.body.dataset.appMode = getAppMode();
   document.body.dataset.subscriptionPlan = getActivePlanKey();
-  elements.accountChooser.hidden = !accountChoiceNeeded;
-  elements.modeChooser.hidden = accountChoiceNeeded || modeWasChosen;
-  elements.setupWizard.hidden = accountChoiceNeeded || !shouldShowSetupWizard();
+  elements.resetPasswordScreen.hidden = !passwordResetNeeded;
+  elements.accountChooser.hidden = passwordResetNeeded || !accountChoiceNeeded;
+  elements.modeChooser.hidden = passwordResetNeeded || accountChoiceNeeded || modeWasChosen;
+  elements.setupWizard.hidden = passwordResetNeeded || accountChoiceNeeded || !shouldShowSetupWizard();
   elements.appSubtitle.textContent = mode.subtitle;
   elements.planName.textContent = `${plan.name} Plan`;
   elements.planSummary.textContent = getActivePlanKey() === "farm"
@@ -2341,6 +2379,15 @@ elements.startupLoginForm.addEventListener("submit", async (event) => {
   }
 });
 
+elements.startupForgotPassword.addEventListener("click", async () => {
+  showStartupCloudMessage("");
+  try {
+    await requestPasswordReset(elements.startupLoginEmail.value, showStartupCloudMessage);
+  } catch (error) {
+    showStartupCloudMessage(error.message, "error");
+  }
+});
+
 elements.startupRegisterForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   showStartupCloudMessage("Creating your account...", "success");
@@ -2356,6 +2403,38 @@ elements.startupRegisterForm.addEventListener("submit", async (event) => {
     showStartupCloudMessage("");
   } catch (error) {
     showStartupCloudMessage(error.message, "error");
+  }
+});
+
+elements.resetPasswordForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  showResetMessage("");
+
+  if (elements.resetNewPassword.value !== elements.resetConfirmPassword.value) {
+    showResetMessage("Passwords do not match.", "error");
+    return;
+  }
+
+  try {
+    const payload = await cloudRequest("/api/password/reset", {
+      method: "POST",
+      body: JSON.stringify({
+        token: passwordResetToken,
+        newPassword: elements.resetNewPassword.value
+      })
+    });
+    passwordResetToken = null;
+    window.history.replaceState({}, "", window.location.pathname);
+    elements.resetPasswordForm.reset();
+    showResetMessage(payload.message, "success");
+    state.settings = normalizeSettings({
+      ...state.settings,
+      accountPromptComplete: false
+    });
+    persist("settings");
+    setTimeout(renderAll, 800);
+  } catch (error) {
+    showResetMessage(error.message, "error");
   }
 });
 
@@ -2450,13 +2529,7 @@ elements.useFreePlan.addEventListener("click", () => {
 });
 
 elements.activateFarmPlan.addEventListener("click", () => {
-  state.settings = normalizeSettings({
-    ...state.settings,
-    subscriptionPlan: "farm"
-  });
-  persist("settings");
-  renderAll();
-  showCloudMessage("Unlimited is active for testing. Unlimited records and paid tools are unlocked.", "success");
+  showCloudMessage("Unlimited memberships are coming later after beta testing.", "error");
 });
 
 document.addEventListener("click", (event) => {
@@ -2852,6 +2925,35 @@ elements.loginForm.addEventListener("submit", async (event) => {
   }
 });
 
+elements.forgotPassword.addEventListener("click", async () => {
+  showCloudMessage("");
+  try {
+    await requestPasswordReset(document.querySelector("#login-email").value, showCloudMessage);
+  } catch (error) {
+    showCloudMessage(error.message, "error");
+  }
+});
+
+elements.changePasswordForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  showCloudMessage("");
+
+  try {
+    const payload = await cloudRequest("/api/password/change", {
+      method: "POST",
+      body: JSON.stringify({
+        currentPassword: elements.currentPassword.value,
+        newPassword: elements.newPassword.value
+      })
+    });
+    elements.changePasswordForm.reset();
+    saveCloudSession(null);
+    showCloudMessage(payload.message, "success");
+  } catch (error) {
+    showCloudMessage(error.message, "error");
+  }
+});
+
 elements.logoutAccount.addEventListener("click", async () => {
   try {
     await cloudRequest("/api/logout", { method: "POST", body: "{}" });
@@ -3084,7 +3186,7 @@ setInterval(updateJobTimer, 1000);
 
 if (window.navigator && "serviceWorker" in window.navigator) {
   window.addEventListener("load", () => {
-    window.navigator.serviceWorker.register("sw.js?v=21").catch((error) => {
+    window.navigator.serviceWorker.register("sw.js?v=23").catch((error) => {
       console.warn("Service worker registration failed:", error);
     });
   });

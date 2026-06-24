@@ -64,3 +64,18 @@ Use this path if the host asks for a health check:
 ## After deploy
 
 Open the hosted HTTPS address in a browser. The same address serves the app and the sync/account server, so login, cloud sync, backups, and reports stay on one site.
+
+## Password Reset Email
+
+Password reset links are built into the server. To actually send reset emails, add SMTP settings in the host environment:
+
+- `TRACTOR_TRACKER_PUBLIC_URL`
+- `TRACTOR_TRACKER_SUPPORT_EMAIL`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASSWORD`
+- `SMTP_FROM`
+- `SMTP_USE_TLS`
+
+If SMTP is not configured, users will be told to contact the support email instead of receiving a reset email.

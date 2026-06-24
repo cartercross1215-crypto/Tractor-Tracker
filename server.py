@@ -5,8 +5,10 @@ import hmac
 import json
 import os
 import secrets
+import smtplib
 import sqlite3
 from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -16,6 +18,8 @@ DATA_DIR = Path(os.environ.get("TRACTOR_TRACKER_DATA_DIR", "."))
 DB_PATH = Path(os.environ.get("TRACTOR_TRACKER_DB", str(DATA_DIR / "tractor_tracker.db")))
 PBKDF2_ITERATIONS = 210_000
 SESSION_DAYS = 30
+RESET_TOKEN_MINUTES = 45
+SUPPORT_EMAIL = os.environ.get("TRACTOR_TRACKER_SUPPORT_EMAIL", "carterc.issa@gmail.com")
 
 
 def utc_now():
@@ -76,6 +80,14 @@ def init_db():
               created_at TEXT NOT NULL,
               FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
             );
+            CREATE TABLE IF NOT EXISTS password_resets (
+              token_hash TEXT PRIMARY KEY,
+              user_id INTEGER NOT NULL,
+              expires_at TEXT NOT NULL,
+              used_at TEXT,
+              created_at TEXT NOT NULL,
+              FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
             """
         )
 
@@ -120,6 +132,8 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
             "/api/login": self.handle_login,
             "/api/logout": self.handle_logout,
             "/api/farm": self.handle_save_farm,
+            "/api/password/forgot": self.handle_forgot_password,
+            "/api/password/reset": self.handle_reset_password,
             "/api/password/change": self.handle_change_password,
         }
         handler = routes.get(self.path)
@@ -173,6 +187,43 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
             (token_hash(token), user_id, expires_at, iso_now()),
         )
         return token, expires_at
+
+    def public_base_url(self):
+        configured_url = os.environ.get("TRACTOR_TRACKER_PUBLIC_URL", "").strip().rstrip("/")
+        if configured_url:
+            return configured_url
+        scheme = self.headers.get("X-Forwarded-Proto", "https" if os.environ.get("PORT") else "http")
+        host = self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or "127.0.0.1:8000"
+        return f"{scheme}://{host}".rstrip("/")
+
+    def send_email(self, to_address, subject, text_body):
+        smtp_host = os.environ.get("SMTP_HOST")
+        smtp_from = os.environ.get("SMTP_FROM") or SUPPORT_EMAIL
+
+        if not smtp_host:
+            print(f"Email not sent because SMTP_HOST is not configured. To: {to_address} Subject: {subject}")
+            print(text_body)
+            return False
+
+        message = EmailMessage()
+        message["From"] = smtp_from
+        message["To"] = to_address
+        message["Subject"] = subject
+        message.set_content(text_body)
+
+        smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+        smtp_user = os.environ.get("SMTP_USER")
+        smtp_password = os.environ.get("SMTP_PASSWORD")
+        use_tls = os.environ.get("SMTP_USE_TLS", "true").lower() != "false"
+
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
+            if use_tls:
+                smtp.starttls()
+            if smtp_user and smtp_password:
+                smtp.login(smtp_user, smtp_password)
+            smtp.send_message(message)
+
+        return True
 
     def farm_payload(self, db, user_id, email, token=None, expires_at=None):
         farm = db.execute("SELECT id, name, data_json, updated_at FROM farms WHERE user_id = ?", (user_id,)).fetchone()
@@ -240,6 +291,79 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
             with connect_db() as db:
                 db.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash(auth.removeprefix("Bearer ").strip()),))
         self.send_json({"ok": True})
+
+    def handle_forgot_password(self):
+        data = self.read_json()
+        if data is None:
+            return
+        email = (data.get("email") or "").strip().lower()
+        generic_message = "If that email has an account, a reset link will be sent."
+        if "@" not in email:
+            self.send_json({"message": generic_message})
+            return
+
+        email_sent = False
+        with connect_db() as db:
+            user = db.execute("SELECT id, email FROM users WHERE email = ?", (email,)).fetchone()
+            if user:
+                db.execute("DELETE FROM password_resets WHERE user_id = ? AND (used_at IS NOT NULL OR expires_at <= ?)", (user["id"], iso_now()))
+                token = secrets.token_urlsafe(32)
+                expires_at = (utc_now() + timedelta(minutes=RESET_TOKEN_MINUTES)).isoformat()
+                db.execute(
+                    "INSERT INTO password_resets (token_hash, user_id, expires_at, used_at, created_at) VALUES (?, ?, ?, NULL, ?)",
+                    (token_hash(token), user["id"], expires_at, iso_now()),
+                )
+                reset_link = f"{self.public_base_url()}/?reset={token}"
+                email_sent = self.send_email(
+                    user["email"],
+                    "Reset your Tractor Tracker password",
+                    "\n".join([
+                        "Use this link to reset your Tractor Tracker password:",
+                        reset_link,
+                        "",
+                        f"This link expires in {RESET_TOKEN_MINUTES} minutes.",
+                        f"If you did not ask for this, you can ignore this email or contact {SUPPORT_EMAIL}.",
+                    ]),
+                )
+
+        if email_sent:
+            self.send_json({"message": generic_message, "emailConfigured": True})
+        else:
+            self.send_json({
+                "message": f"Password reset email is not configured yet. Contact {SUPPORT_EMAIL} for help.",
+                "emailConfigured": False,
+            })
+
+    def handle_reset_password(self):
+        data = self.read_json()
+        if data is None:
+            return
+        token = (data.get("token") or "").strip()
+        new_password = data.get("newPassword") or ""
+        if not token or len(new_password) < 8:
+            self.send_json({"message": "Enter a valid reset link and a password with at least 8 characters."}, HTTPStatus.BAD_REQUEST)
+            return
+
+        hashed_token = token_hash(token)
+        with connect_db() as db:
+            reset = db.execute(
+                """
+                SELECT token_hash, user_id
+                FROM password_resets
+                WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?
+                """,
+                (hashed_token, iso_now()),
+            ).fetchone()
+            if not reset:
+                self.send_json({"message": "That reset link is expired or invalid."}, HTTPStatus.BAD_REQUEST)
+                return
+
+            salt, digest = hash_password(new_password)
+            db.execute("UPDATE users SET password_salt = ?, password_hash = ? WHERE id = ?", (salt, digest, reset["user_id"]))
+            db.execute("UPDATE password_resets SET used_at = ? WHERE token_hash = ?", (iso_now(), hashed_token))
+            db.execute("DELETE FROM sessions WHERE user_id = ?", (reset["user_id"],))
+
+        self.send_json({"message": "Password changed. Log in with your new password."})
 
     def handle_get_farm(self):
         user = self.authenticated_user()

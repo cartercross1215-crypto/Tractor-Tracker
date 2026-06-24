@@ -9,6 +9,10 @@ services:
         value: 0.0.0.0
       - key: TRACTOR_TRACKER_DATA_DIR
         value: /data
+      - key: TRACTOR_TRACKER_PUBLIC_URL
+        value: https://tractor-tracker-yboz.onrender.com
+      - key: TRACTOR_TRACKER_SUPPORT_EMAIL
+        value: carterc.issa@gmail.com
     disk:
       name: tractor-tracker-data
       mountPath: /data

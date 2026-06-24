@@ -5,8 +5,8 @@ Tractor Tracker is a browser-based MVP for farmers and independent contractors w
 ## What is included
 
 - One-machine free plan workflow
-- Subscription plan foundation with Free and Unlimited plan levels
-- Free plan limits: one machine, one operator, five fields or job sites, cloud account sync during the pre-payment build, and basic reports
+- Free Beta plan label for public testing
+- Free Beta limits: one machine, one operator, five fields or job sites, cloud account sync during the pre-payment build, and basic reports
 - Unlimited plan test switch: unlimited machines, unlimited fields/job sites, multiple operators, cloud backup, syncing, advanced reports, and full export tools
 - Local-first automatic sync with Saved locally, Synced, Offline, and conflict-safe status messages
 - Startup mode choice for Farm Work or Contracting
@@ -34,9 +34,12 @@ Tractor Tracker is a browser-based MVP for farmers and independent contractors w
 - Separate CSV export for completed maintenance history
 - JSON farm backup download and restore
 - Installable offline app support
+- iPhone/iPad home-screen icon support with Apple touch icons
 - Account and sync foundation with a local secure database server
 - Startup cloud account prompt for existing account login, new account creation, or local-only use
 - Login automatically downloads the account's cloud records onto the device
+- Forgot password and reset-link foundation with expiring tokens and SMTP email hooks
+- Logged-in password change with confirmation and session logout
 - Temporary support and app-update contact email: carterc.issa@gmail.com
 - Sample data button for quick testing
 - Local browser storage
@@ -69,7 +72,7 @@ See `DEPLOYMENT.md` for the hosting checklist.
 
 ## Current limitations
 
-This is still a prototype. It now includes an account/sync server, automatic sync logic, hosted cloud account flow, hosting-ready server settings, and subscription-plan logic, but email password reset, real payment processing, photos, documents, and GPS tracking are not added yet. Data is saved in the browser immediately and syncs later when the sync server is available.
+This is still a prototype. It now includes an account/sync server, automatic sync logic, hosted cloud account flow, hosting-ready server settings, Free Beta plan labeling, and password reset hooks, but real payment processing, production email provider configuration, photos, documents, and GPS tracking are not added yet. Data is saved in the browser immediately and syncs later when the sync server is available.
 
 ## Paid plan direction
 
