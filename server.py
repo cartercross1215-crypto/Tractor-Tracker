@@ -93,6 +93,7 @@ def empty_farm_data():
         "maintenanceHistory": [],
         "settings": {
             "appMode": None,
+            "accountPromptComplete": False,
             "setupComplete": False,
             "businessName": "",
             "subscriptionPlan": "free",

@@ -25,7 +25,7 @@ const SUBSCRIPTION_PLANS = {
     features: {
       advancedReports: false,
       exportTools: false,
-      cloudSync: false
+      cloudSync: true
     }
   },
   farm: {
@@ -130,6 +130,7 @@ const state = {
   }),
   settings: loadData(STORAGE_KEYS.settings, {
     appMode: null,
+    accountPromptComplete: false,
     setupComplete: false,
     businessName: "",
     subscriptionPlan: "free",
@@ -163,6 +164,8 @@ const elements = {
   settingsForm: document.querySelector("#settings-form"),
   registerForm: document.querySelector("#register-form"),
   loginForm: document.querySelector("#login-form"),
+  startupLoginForm: document.querySelector("#startup-login-form"),
+  startupRegisterForm: document.querySelector("#startup-register-form"),
   equipmentDisplay: document.querySelector("#equipment-display"),
   fieldList: document.querySelector("#field-list"),
   customerList: document.querySelector("#customer-list"),
@@ -241,6 +244,14 @@ const elements = {
 
 Object.assign(elements, {
   modeChooser: document.querySelector("#mode-chooser"),
+  accountChooser: document.querySelector("#account-chooser"),
+  startupCloudMessage: document.querySelector("#startup-cloud-message"),
+  startupLoginEmail: document.querySelector("#startup-login-email"),
+  startupLoginPassword: document.querySelector("#startup-login-password"),
+  startupRegisterFarm: document.querySelector("#startup-register-farm"),
+  startupRegisterEmail: document.querySelector("#startup-register-email"),
+  startupRegisterPassword: document.querySelector("#startup-register-password"),
+  continueLocal: document.querySelector("#continue-local"),
   setupWizard: document.querySelector("#setup-wizard"),
   appMode: document.querySelector("#app-mode"),
   settingsBusinessLabel: document.querySelector("#settings-business-label"),
@@ -348,6 +359,7 @@ function number(value, decimals = 1) {
 function normalizeSettings(settings = {}) {
   return {
     appMode: settings.appMode || null,
+    accountPromptComplete: Boolean(settings.accountPromptComplete),
     setupComplete: Boolean(settings.setupComplete),
     businessName: settings.businessName || "",
     subscriptionPlan: settings.subscriptionPlan === "farm" ? "farm" : "free",
@@ -381,6 +393,10 @@ function hasStarterRecords() {
 
 function shouldShowSetupWizard() {
   return Boolean(state.settings.appMode && !state.settings.setupComplete && !hasStarterRecords());
+}
+
+function shouldShowAccountChooser() {
+  return Boolean(!state.cloudSession?.token && !state.settings.accountPromptComplete);
 }
 
 function getActivePlanKey() {
@@ -531,6 +547,11 @@ function showCloudMessage(text, type = "") {
   elements.cloudMessage.className = `message ${type}`;
 }
 
+function showStartupCloudMessage(text, type = "") {
+  elements.startupCloudMessage.textContent = text;
+  elements.startupCloudMessage.className = `message ${type}`;
+}
+
 function showPlanUpgrade(featureName) {
   const message = planUpgradeMessage(featureName);
   showBackupMessage(message, "error");
@@ -547,7 +568,7 @@ function persist(key) {
 }
 
 function isCloudSyncReady() {
-  return hasPlanFeature("cloudSync") && Boolean(state.cloudSession?.token);
+  return Boolean(state.cloudSession?.token);
 }
 
 function isBrowserOffline() {
@@ -555,7 +576,7 @@ function isBrowserOffline() {
 }
 
 function getSyncStatusText() {
-  if (!hasPlanFeature("cloudSync") || !state.cloudSession?.token) {
+  if (!state.cloudSession?.token) {
     return "Saved locally";
   }
 
@@ -823,13 +844,53 @@ function saveCloudSession(session) {
   }
 }
 
+function completeAccountPrompt() {
+  state.settings = normalizeSettings({
+    ...state.settings,
+    accountPromptComplete: true
+  });
+  persist("settings");
+  renderAll();
+}
+
+async function logInToCloud(email, password) {
+  const payload = await cloudRequest("/api/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password })
+  });
+  const restoredData = normalizeRestoredBackup(payload.farm.data);
+  restoredData.settings = normalizeSettings({
+    ...restoredData.settings,
+    accountPromptComplete: true
+  });
+  restoreFarmBackup(restoredData, { source: "cloud", cloudUpdatedAt: payload.farm.updatedAt });
+  saveCloudSession(sessionFromPayload(payload));
+  return payload;
+}
+
+async function createCloudAccount({ farmName, email, password }) {
+  const payload = await cloudRequest("/api/register", {
+    method: "POST",
+    body: JSON.stringify({ farmName, email, password })
+  });
+  saveCloudSession(sessionFromPayload(payload));
+  state.settings = normalizeSettings({
+    ...state.settings,
+    accountPromptComplete: true,
+    businessName: state.settings.businessName || farmName
+  });
+  persist("settings");
+  await uploadFarmToCloud();
+  return payload;
+}
+
 function renderCloudAccount() {
   const session = state.cloudSession;
   const isConnected = Boolean(session?.token);
-  const canSync = hasPlanFeature("cloudSync");
+  const canSync = true;
   const registerFarm = document.querySelector("#register-farm");
   elements.cloudStatus.textContent = canSync
-    ? (isConnected ? "Connected to Tractor Tracker sync." : "Local-only mode. Start the Tractor Tracker server to use accounts and sync.")
+    ? (isConnected ? "Connected to Tractor Tracker cloud sync." : "Log in or create an account to sync this device.")
     : planUpgradeMessage("Cloud backup and device syncing");
   elements.cloudFarmName.textContent = session?.farmName || "Not connected";
   elements.cloudAccountEmail.textContent = session?.email || "Not connected";
@@ -849,7 +910,7 @@ function renderSubscriptionPlan() {
   const planKey = getActivePlanKey();
   const plan = getActivePlan();
   elements.subscriptionPrice.textContent = plan.price;
-  elements.subscriptionStatus.textContent = `${plan.name} plan is active. ${planKey === "farm" ? "Unlimited equipment, operators, and sites are unlocked." : "Upgrade to Unlimited for unlimited records, cloud sync, advanced reports, and full export tools."}`;
+  elements.subscriptionStatus.textContent = `${plan.name} plan is active. ${planKey === "farm" ? "Unlimited equipment, operators, and sites are unlocked." : "Cloud account sync is available while payments are being built. Upgrade to Unlimited for unlimited records, advanced reports, and full export tools."}`;
   elements.freePlanCard.classList.toggle("active-plan", planKey === "free");
   elements.farmPlanCard.classList.toggle("active-plan", planKey === "farm");
   elements.useFreePlan.disabled = planKey === "free";
@@ -906,12 +967,14 @@ function renderAppModeContent() {
   const fieldLimit = getPlanLimit("fields");
   const selectedDistanceUnit = elements.jobDistanceUnit.value || getPreferredDistanceUnit();
   const distanceUnit = unitLabel(selectedDistanceUnit);
+  const accountChoiceNeeded = shouldShowAccountChooser();
   const modeWasChosen = Boolean(state.settings.appMode);
 
   document.body.dataset.appMode = getAppMode();
   document.body.dataset.subscriptionPlan = getActivePlanKey();
-  elements.modeChooser.hidden = modeWasChosen;
-  elements.setupWizard.hidden = !shouldShowSetupWizard();
+  elements.accountChooser.hidden = !accountChoiceNeeded;
+  elements.modeChooser.hidden = accountChoiceNeeded || modeWasChosen;
+  elements.setupWizard.hidden = accountChoiceNeeded || !shouldShowSetupWizard();
   elements.appSubtitle.textContent = mode.subtitle;
   elements.planName.textContent = `${plan.name} Plan`;
   elements.planSummary.textContent = getActivePlanKey() === "farm"
@@ -1008,11 +1071,6 @@ function sessionFromPayload(payload, existingToken = null) {
 }
 
 async function uploadFarmToCloud() {
-  if (!hasPlanFeature("cloudSync")) {
-    showPlanUpgrade("Cloud backup and device syncing");
-    return;
-  }
-
   await syncLocalChanges({ manual: true });
 }
 
@@ -1083,13 +1141,12 @@ async function syncLocalChanges({ manual = false } = {}) {
 }
 
 async function downloadFarmFromCloud() {
-  if (!hasPlanFeature("cloudSync")) {
-    showPlanUpgrade("Cloud backup and device syncing");
-    return;
-  }
-
   const payload = await cloudRequest("/api/farm");
   const restoredData = normalizeRestoredBackup(payload.farm.data);
+  restoredData.settings = normalizeSettings({
+    ...restoredData.settings,
+    accountPromptComplete: true
+  });
   restoreFarmBackup(restoredData, { source: "cloud", cloudUpdatedAt: payload.farm.updatedAt });
   saveCloudSession(sessionFromPayload(payload));
   setSyncMeta({
@@ -2234,6 +2291,7 @@ elements.settingsForm.addEventListener("submit", (event) => {
   event.preventDefault();
   state.settings = {
     appMode: elements.appMode.value,
+    accountPromptComplete: state.settings.accountPromptComplete,
     setupComplete: state.settings.setupComplete,
     businessName: elements.settingsBusinessName.value.trim(),
     subscriptionPlan: getActivePlanKey(),
@@ -2242,6 +2300,63 @@ elements.settingsForm.addEventListener("submit", (event) => {
   };
   persist("settings");
   renderAll();
+});
+
+elements.accountChooser.addEventListener("click", (event) => {
+  const choice = event.target.closest("[data-account-choice]");
+
+  if (!choice) {
+    return;
+  }
+
+  const wantsLogin = choice.dataset.accountChoice === "login";
+  elements.startupLoginForm.hidden = !wantsLogin;
+  elements.startupRegisterForm.hidden = wantsLogin;
+  showStartupCloudMessage("");
+
+  if (wantsLogin) {
+    elements.startupLoginEmail.focus();
+  } else {
+    elements.startupRegisterFarm.value = state.settings.businessName || "";
+    elements.startupRegisterFarm.focus();
+  }
+});
+
+elements.continueLocal.addEventListener("click", () => {
+  showStartupCloudMessage("");
+  completeAccountPrompt();
+});
+
+elements.startupLoginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  showStartupCloudMessage("Logging in and downloading your cloud records...", "success");
+
+  try {
+    await logInToCloud(elements.startupLoginEmail.value.trim(), elements.startupLoginPassword.value);
+    elements.startupLoginForm.reset();
+    showCloudMessage("Logged in. Cloud records downloaded to this device.", "success");
+    showStartupCloudMessage("");
+  } catch (error) {
+    showStartupCloudMessage(error.message, "error");
+  }
+});
+
+elements.startupRegisterForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  showStartupCloudMessage("Creating your account...", "success");
+
+  try {
+    await createCloudAccount({
+      farmName: elements.startupRegisterFarm.value.trim(),
+      email: elements.startupRegisterEmail.value.trim(),
+      password: elements.startupRegisterPassword.value
+    });
+    elements.startupRegisterForm.reset();
+    showCloudMessage("Account created and this device is synced.", "success");
+    showStartupCloudMessage("");
+  } catch (error) {
+    showStartupCloudMessage(error.message, "error");
+  }
 });
 
 elements.modeChooser.addEventListener("click", (event) => {
@@ -2692,6 +2807,7 @@ elements.sampleData.addEventListener("click", () => {
   state.maintenanceHistory = [];
   state.settings = {
     appMode: getAppMode(),
+    accountPromptComplete: state.settings.accountPromptComplete,
     setupComplete: true,
     businessName: state.settings.businessName || (contractorMode ? "Carter Contracting" : "Home Farm"),
     subscriptionPlan: getActivePlanKey(),
@@ -2707,23 +2823,13 @@ elements.registerForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   showCloudMessage("");
 
-  if (!hasPlanFeature("cloudSync")) {
-    showPlanUpgrade("Accounts and cloud sync");
-    return;
-  }
-
   try {
-    const payload = await cloudRequest("/api/register", {
-      method: "POST",
-      body: JSON.stringify({
-        farmName: document.querySelector("#register-farm").value.trim(),
-        email: document.querySelector("#register-email").value.trim(),
-        password: document.querySelector("#register-password").value
-      })
+    await createCloudAccount({
+      farmName: document.querySelector("#register-farm").value.trim(),
+      email: document.querySelector("#register-email").value.trim(),
+      password: document.querySelector("#register-password").value
     });
-    saveCloudSession(sessionFromPayload(payload));
     elements.registerForm.reset();
-    await uploadFarmToCloud();
     showCloudMessage("Account created and this device is synced.", "success");
   } catch (error) {
     showCloudMessage(error.message, "error");
@@ -2734,22 +2840,13 @@ elements.loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   showCloudMessage("");
 
-  if (!hasPlanFeature("cloudSync")) {
-    showPlanUpgrade("Accounts and cloud sync");
-    return;
-  }
-
   try {
-    const payload = await cloudRequest("/api/login", {
-      method: "POST",
-      body: JSON.stringify({
-        email: document.querySelector("#login-email").value.trim(),
-        password: document.querySelector("#login-password").value
-      })
-    });
-    saveCloudSession(sessionFromPayload(payload));
+    await logInToCloud(
+      document.querySelector("#login-email").value.trim(),
+      document.querySelector("#login-password").value
+    );
     elements.loginForm.reset();
-    showCloudMessage("Logged in. Use Download Cloud Copy or Upload This Device to sync.", "success");
+    showCloudMessage("Logged in. Cloud records downloaded to this device.", "success");
   } catch (error) {
     showCloudMessage(error.message, "error");
   }
@@ -2987,7 +3084,7 @@ setInterval(updateJobTimer, 1000);
 
 if (window.navigator && "serviceWorker" in window.navigator) {
   window.addEventListener("load", () => {
-    window.navigator.serviceWorker.register("sw.js?v=19").catch((error) => {
+    window.navigator.serviceWorker.register("sw.js?v=20").catch((error) => {
       console.warn("Service worker registration failed:", error);
     });
   });

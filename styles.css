@@ -17,6 +17,7 @@ body {
   display: none !important;
 }
 
+body:has(.account-chooser:not([hidden])),
 body:has(.mode-chooser:not([hidden])),
 body:has(.setup-wizard:not([hidden])) {
   overflow: hidden;
@@ -84,6 +85,7 @@ main {
     repeating-linear-gradient(90deg, #244b29 0 18px, #315f36 18px 36px);
 }
 
+.account-chooser,
 .mode-chooser,
 .setup-wizard {
   position: fixed;
@@ -95,6 +97,7 @@ main {
   background: rgba(20, 28, 20, 0.72);
 }
 
+.account-card,
 .mode-card,
 .setup-card {
   width: min(100%, 680px);
@@ -107,6 +110,7 @@ main {
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
 }
 
+.account-card h2,
 .mode-card h2,
 .setup-card h2 {
   font-size: 1.55rem;
@@ -114,6 +118,10 @@ main {
 
 .setup-card {
   width: min(100%, 780px);
+}
+
+.startup-account-form {
+  margin-top: 1rem;
 }
 
 .mode-options {
