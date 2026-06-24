@@ -15,16 +15,16 @@ const STORAGE_KEYS = {
 
 const SUBSCRIPTION_PLANS = {
   free: {
-    name: "Free Beta",
+    name: "Free Unlimited Beta",
     price: "Beta",
     limits: {
-      equipment: 1,
-      operators: 1,
-      fields: 5
+      equipment: Infinity,
+      operators: Infinity,
+      fields: Infinity
     },
     features: {
-      advancedReports: false,
-      exportTools: false,
+      advancedReports: true,
+      exportTools: true,
       cloudSync: true
     }
   },
@@ -440,7 +440,7 @@ function isAtPlanLimit(listName) {
 }
 
 function planUpgradeMessage(featureName) {
-  return `${featureName} is included with Unlimited at $9.99/month.`;
+  return `${featureName} is available during the Free Unlimited Beta.`;
 }
 
 function currency(value) {
@@ -945,7 +945,7 @@ function renderCloudAccount() {
 
 function renderSubscriptionPlan() {
   elements.subscriptionPrice.textContent = "Beta";
-  elements.subscriptionStatus.textContent = "Free Beta is active. Cloud account sync is available while payments and memberships are being built.";
+  elements.subscriptionStatus.textContent = "Free Unlimited Beta is active. Unlimited records, reports, exports, backups, and cloud sync are open during beta.";
   elements.freePlanCard.classList.add("active-plan");
   elements.farmPlanCard.hidden = true;
   elements.activateFarmPlan.hidden = true;
@@ -2525,7 +2525,7 @@ elements.useFreePlan.addEventListener("click", () => {
   });
   persist("settings");
   renderAll();
-  showCloudMessage("Free plan is active. Existing records stay saved, but Free limits apply to new records.", "success");
+  showCloudMessage("Free Unlimited Beta is active.", "success");
 });
 
 elements.activateFarmPlan.addEventListener("click", () => {
@@ -3186,7 +3186,7 @@ setInterval(updateJobTimer, 1000);
 
 if (window.navigator && "serviceWorker" in window.navigator) {
   window.addEventListener("load", () => {
-    window.navigator.serviceWorker.register("sw.js?v=23").catch((error) => {
+    window.navigator.serviceWorker.register("sw.js?v=24").catch((error) => {
       console.warn("Service worker registration failed:", error);
     });
   });

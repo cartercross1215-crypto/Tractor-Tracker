@@ -5,9 +5,8 @@ Tractor Tracker is a browser-based MVP for farmers and independent contractors w
 ## What is included
 
 - One-machine free plan workflow
-- Free Beta plan label for public testing
-- Free Beta limits: one machine, one operator, five fields or job sites, cloud account sync during the pre-payment build, and basic reports
-- Unlimited plan test switch: unlimited machines, unlimited fields/job sites, multiple operators, cloud backup, syncing, advanced reports, and full export tools
+- Free Unlimited Beta plan label for public testing
+- Free Unlimited Beta access: unlimited machines, fields/job sites, operators, cloud backup, syncing, advanced reports, exports, backups, and full export tools
 - Local-first automatic sync with Saved locally, Synced, Offline, and conflict-safe status messages
 - Startup mode choice for Farm Work or Contracting
 - First-use setup flow for farm/business name, units, currency, first equipment, first operator, and first field or job site
@@ -72,7 +71,7 @@ See `DEPLOYMENT.md` for the hosting checklist.
 
 ## Current limitations
 
-This is still a prototype. It now includes an account/sync server, automatic sync logic, hosted cloud account flow, hosting-ready server settings, Free Beta plan labeling, and password reset hooks, but real payment processing, production email provider configuration, photos, documents, and GPS tracking are not added yet. Data is saved in the browser immediately and syncs later when the sync server is available.
+This is still a prototype. It now includes an account/sync server, automatic sync logic, hosted cloud account flow, hosting-ready server settings, Free Unlimited Beta plan access, and password reset hooks, but real payment processing, production email provider configuration, photos, documents, and GPS tracking are not added yet. Data is saved in the browser immediately and syncs later when the sync server is available.
 
 ## Paid plan direction
 
