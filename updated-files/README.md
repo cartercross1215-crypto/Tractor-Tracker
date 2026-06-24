@@ -1,0 +1,73 @@
+# Tractor Tracker
+
+Tractor Tracker is a browser-based MVP for farmers and independent contractors who want simple equipment, job, fuel, and billing records.
+
+## What is included
+
+- One-machine free plan workflow
+- Subscription plan foundation with Free and Unlimited plan levels
+- Free plan limits: one machine, one operator, five fields or job sites, local storage, and basic reports
+- Unlimited plan test switch: unlimited machines, unlimited fields/job sites, multiple operators, cloud backup, syncing, advanced reports, and full export tools
+- Local-first automatic sync with Saved locally, Synced, Offline, and conflict-safe status messages
+- Startup mode choice for Farm Work or Contracting
+- First-use setup flow for farm/business name, units, currency, first equipment, first operator, and first field or job site
+- Live dashboard using saved fields/job sites, weekly work totals, active jobs, maintenance, distance, loads, and estimated revenue
+- Mode can be changed later in Settings without deleting saved records
+- Equipment list foundation with add, edit, and delete controls
+- Operator, implement/attachment, field, and job-site setup
+- Edit controls for jobs, fields, operators, implements, equipment, and maintenance reminders
+- Fieldwork job logging
+- Active job timer with Start Job and Finish Job controls
+- Manual start and finish times
+- Acres, fuel, weather, field conditions, and notes
+- Distance tracking for hauling records
+- Contractor records for customers/job sites, work hours, loads hauled, material type, billing totals, and cost per hour or mile/kilometer
+- Contracting customer records with company, phone, email, billing address, job sites, outstanding balance, and job history
+- Miles/kilometers and gallons/liters settings
+- Fuel capacity can be recorded in gallons or liters
+- Fuel economy reports for MPG, kilometers/liter, and liters/100km
+- Cost per mile and cost per kilometer reporting
+- Automatic equipment-hour updates
+- Machine-specific maintenance reminders by engine hours
+- Basic reports and cost-per-acre calculations
+- CSV export for job history
+- Separate CSV export for completed maintenance history
+- JSON farm backup download and restore
+- Installable offline app support
+- Account and sync foundation with a local secure database server
+- Sample data button for quick testing
+- Local browser storage
+
+## Run it
+
+Open `index.html` in a browser for local-only use.
+
+For installable/offline app testing, serve the folder from localhost with Live Server or:
+
+```sh
+python3 -m http.server 8000
+```
+
+Then open `http://localhost:8000`.
+
+For accounts and sync, run the included server instead:
+
+```sh
+python3 server.py
+```
+
+Then open `http://127.0.0.1:8000`. The server stores accounts and farm data in `tractor_tracker.db` using SQLite, password hashing, and session tokens.
+
+## Host it online
+
+Tractor Tracker can now run on an online Python or Docker web host so the app works without this Mac running. Use the included `Dockerfile`, `render.yaml`, or start command `python3 server.py`, attach a persistent disk for the SQLite database, and set `HOST=0.0.0.0`.
+
+See `DEPLOYMENT.md` for the hosting checklist.
+
+## Current limitations
+
+This is still a prototype. It now includes an account/sync server, automatic sync logic, hosting-ready server settings, and subscription-plan logic, but email password reset, real payment processing, photos, documents, and GPS tracking are not added yet. Data is saved in the browser immediately and syncs later when the sync server is available.
+
+## Paid plan direction
+
+The paid version is modeled as the Unlimited plan at about $9.99/month. Real payment checkout, subscription webhooks, invoices, and hosted customer billing still need to be connected before public launch.
