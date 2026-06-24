@@ -135,6 +135,18 @@ main {
   font-weight: 800;
 }
 
+.legal-links {
+  margin: 0;
+  color: #667064;
+  font-size: 0.9rem;
+}
+
+.legal-links a,
+.legal-panel a {
+  color: #315f36;
+  font-weight: 800;
+}
+
 .mode-options {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -567,6 +579,31 @@ label {
   justify-content: flex-end;
 }
 
+.danger-zone {
+  border-color: #efc5bf;
+}
+
+.danger-button {
+  background: #963a31;
+}
+
+.legal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.legal-grid article {
+  padding: 1rem;
+  border: 1px solid #dce3d5;
+  border-radius: 8px;
+  background: #f7f8f3;
+}
+
+.legal-grid h3 {
+  margin-top: 0;
+}
+
 button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -641,6 +678,7 @@ button:disabled {
   .layout-two,
   .summary-grid,
   .report-grid,
+  .legal-grid,
   .plan-grid {
     grid-template-columns: 1fr;
   }

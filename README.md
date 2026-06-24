@@ -39,6 +39,8 @@ Tractor Tracker is a browser-based MVP for farmers and independent contractors w
 - Login automatically downloads the account's cloud records onto the device
 - Forgot password and reset-link foundation with expiring tokens and SMTP email hooks
 - Logged-in password change with confirmation and session logout
+- Privacy Policy, Terms of Service, and data deletion instructions inside the Account section
+- Account controls for data download, cloud-data deletion, account deletion, and logging out all devices
 - Temporary support and app-update contact email: carterc.issa@gmail.com
 - Sample data button for quick testing
 - Local browser storage

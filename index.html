@@ -9,14 +9,14 @@
   <meta name="apple-mobile-web-app-title" content="Tractor Tracker" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Tractor Tracker</title>
-  <link rel="manifest" href="manifest.webmanifest?v=24" />
+  <link rel="manifest" href="manifest.webmanifest?v=25" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png" />
   <link rel="apple-touch-icon" sizes="167x167" href="icons/apple-touch-icon-167.png" />
   <link rel="apple-touch-icon" sizes="152x152" href="icons/apple-touch-icon-152.png" />
-  <link rel="stylesheet" href="styles.css?v=24" />
+  <link rel="stylesheet" href="styles.css?v=25" />
 </head>
 <body>
   <section id="account-chooser" class="account-chooser" hidden>
@@ -50,6 +50,7 @@
         <div class="form-actions full-width">
           <button type="submit">Create Account</button>
         </div>
+        <p class="legal-links full-width">By creating an account you agree to the <a href="#privacy-policy">Privacy Policy</a> and <a href="#terms-service">Terms of Service</a>.</p>
       </form>
       <div class="form-actions full-width">
         <button id="continue-local" type="button" class="ghost-button">Continue on this device only</button>
@@ -470,6 +471,7 @@
             <div class="form-actions full-width">
               <button type="submit">Create Account</button>
             </div>
+            <p class="legal-links full-width">By creating an account you agree to the <a href="#privacy-policy">Privacy Policy</a> and <a href="#terms-service">Terms of Service</a>.</p>
           </form>
 
           <form id="login-form" class="form-grid compact-form">
@@ -494,6 +496,8 @@
           <div class="form-actions compact-form">
             <button id="upload-cloud" type="button" disabled>Upload This Device</button>
             <button id="download-cloud" type="button" class="secondary-button" disabled>Download Cloud Copy</button>
+            <button id="download-account-data" type="button" class="secondary-button">Download All Data</button>
+            <button id="logout-all-devices" type="button" class="ghost-button" disabled>Log Out All Devices</button>
           </div>
         </section>
 
@@ -507,10 +511,41 @@
             </div>
           </form>
         </section>
+
+        <section class="panel danger-zone">
+          <h2>Account and Data Deletion</h2>
+          <p>These actions affect the cloud account. Download your data first if you want a copy.</p>
+          <div class="form-actions compact-form">
+            <button id="delete-cloud-data" type="button" class="secondary-button danger-button" disabled>Delete Cloud Data</button>
+            <button id="delete-account" type="button" class="danger-button" disabled>Delete Account</button>
+          </div>
+        </section>
       </div>
+
+      <section class="panel legal-panel">
+        <h2>Privacy, Terms, and Data</h2>
+        <div class="legal-grid">
+          <article id="privacy-policy">
+            <h3>Privacy Policy</h3>
+            <p>Tractor Tracker stores account email addresses, farm or business names, equipment records, operators, fields or job sites, jobs, maintenance reminders, completed maintenance history, customers, settings, and sync status.</p>
+            <p>Records are saved locally in this browser immediately. When you log in, the same records can also be saved online to your Tractor Tracker cloud account for syncing across devices.</p>
+            <p>Support contact: <a href="mailto:carterc.issa@gmail.com?subject=Tractor%20Tracker%20privacy">carterc.issa@gmail.com</a>.</p>
+          </article>
+          <article id="terms-service">
+            <h3>Terms of Service</h3>
+            <p>Tractor Tracker is a Free Unlimited Beta. Use it for testing and recordkeeping, but keep your own backups of important business records while the beta is being improved.</p>
+            <p>Do not rely on the beta as the only permanent copy of customer, billing, tax, or compliance records.</p>
+          </article>
+          <article id="data-deletion">
+            <h3>Data Deletion</h3>
+            <p>Use Download All Data before deleting anything. Delete Cloud Data clears synced cloud records but keeps the account. Delete Account removes the account, cloud records, reset links, and sessions.</p>
+            <p>Local browser data can be cleared from your browser settings, or by deleting site data for Tractor Tracker.</p>
+          </article>
+        </div>
+      </section>
     </section>
   </main>
 
-  <script src="app.js?v=24"></script>
+  <script src="app.js?v=25"></script>
 </body>
 </html>

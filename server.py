@@ -50,6 +50,7 @@ def connect_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
     return connection
 
 
@@ -135,6 +136,9 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
             "/api/password/forgot": self.handle_forgot_password,
             "/api/password/reset": self.handle_reset_password,
             "/api/password/change": self.handle_change_password,
+            "/api/logout-all": self.handle_logout_all,
+            "/api/farm/delete-cloud": self.handle_delete_cloud_data,
+            "/api/account/delete": self.handle_delete_account,
         }
         handler = routes.get(self.path)
         if handler:
@@ -241,6 +245,10 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
             payload["expiresAt"] = expires_at
         return payload
 
+    def verify_current_password_payload(self, db, user_id, password):
+        row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        return bool(row and verify_password(password or "", row["password_salt"], row["password_hash"]))
+
     def handle_register(self):
         data = self.read_json()
         if data is None:
@@ -291,6 +299,14 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
             with connect_db() as db:
                 db.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash(auth.removeprefix("Bearer ").strip()),))
         self.send_json({"ok": True})
+
+    def handle_logout_all(self):
+        user = self.authenticated_user()
+        if not user:
+            return
+        with connect_db() as db:
+            db.execute("DELETE FROM sessions WHERE user_id = ?", (user["id"],))
+        self.send_json({"message": "Logged out of all devices."})
 
     def handle_forgot_password(self):
         data = self.read_json()
@@ -408,6 +424,45 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
                 (farm_name, json.dumps(farm_data), updated_at, user["id"]),
             )
             self.send_json(self.farm_payload(db, user["id"], user["email"]))
+
+    def handle_delete_cloud_data(self):
+        user = self.authenticated_user()
+        if not user:
+            return
+        data = self.read_json()
+        if data is None:
+            return
+        password = data.get("password") or ""
+        with connect_db() as db:
+            if not self.verify_current_password_payload(db, user["id"], password):
+                self.send_json({"message": "Password is incorrect."}, HTTPStatus.UNAUTHORIZED)
+                return
+            cleared_data = empty_farm_data()
+            cleared_data["settings"]["accountPromptComplete"] = True
+            updated_at = iso_now()
+            db.execute(
+                "UPDATE farms SET name = ?, data_json = ?, updated_at = ? WHERE user_id = ?",
+                ("Cleared Account", json.dumps(cleared_data), updated_at, user["id"]),
+            )
+            self.send_json(self.farm_payload(db, user["id"], user["email"]))
+
+    def handle_delete_account(self):
+        user = self.authenticated_user()
+        if not user:
+            return
+        data = self.read_json()
+        if data is None:
+            return
+        password = data.get("password") or ""
+        with connect_db() as db:
+            if not self.verify_current_password_payload(db, user["id"], password):
+                self.send_json({"message": "Password is incorrect."}, HTTPStatus.UNAUTHORIZED)
+                return
+            db.execute("DELETE FROM password_resets WHERE user_id = ?", (user["id"],))
+            db.execute("DELETE FROM sessions WHERE user_id = ?", (user["id"],))
+            db.execute("DELETE FROM farms WHERE user_id = ?", (user["id"],))
+            db.execute("DELETE FROM users WHERE id = ?", (user["id"],))
+        self.send_json({"message": "Account and cloud data deleted."})
 
     def handle_change_password(self):
         user = self.authenticated_user()

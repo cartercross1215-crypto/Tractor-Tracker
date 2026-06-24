@@ -197,8 +197,12 @@ const elements = {
   useFreePlan: document.querySelector("#use-free-plan"),
   activateFarmPlan: document.querySelector("#activate-farm-plan"),
   logoutAccount: document.querySelector("#logout-account"),
+  logoutAllDevices: document.querySelector("#logout-all-devices"),
   uploadCloud: document.querySelector("#upload-cloud"),
   downloadCloud: document.querySelector("#download-cloud"),
+  downloadAccountData: document.querySelector("#download-account-data"),
+  deleteCloudData: document.querySelector("#delete-cloud-data"),
+  deleteAccount: document.querySelector("#delete-account"),
   clearJobs: document.querySelector("#clear-jobs"),
   sampleData: document.querySelector("#sample-data"),
   exportCsv: document.querySelector("#export-csv"),
@@ -920,6 +924,68 @@ async function requestPasswordReset(email, showMessage) {
   showMessage(payload.message, payload.emailConfigured === false ? "error" : "success");
 }
 
+function promptForAccountPassword(actionName) {
+  const password = window.prompt(`Enter your Tractor Tracker password to ${actionName}.`);
+  return password === null ? null : password;
+}
+
+function clearLocalFarmDataAfterDeletion() {
+  state.equipment = [];
+  state.fields = [];
+  state.customers = [];
+  state.operators = [];
+  state.implements = [];
+  state.jobs = [];
+  state.activeJob = null;
+  state.maintenance = [];
+  state.maintenanceHistory = [];
+  state.settings = normalizeSettings({
+    appMode: null,
+    accountPromptComplete: true,
+    setupComplete: false,
+    businessName: "",
+    subscriptionPlan: "free",
+    measurementSystem: state.settings.measurementSystem || "us",
+    currency: state.settings.currency || "USD"
+  });
+  clearEditState();
+  persistWithoutSyncTracking(() => {
+    ["equipment", "fields", "customers", "operators", "implements", "jobs", "activeJob", "maintenance", "maintenanceHistory", "settings"].forEach((key) => persist(key));
+  });
+  setSyncMeta({
+    status: "local",
+    pending: false,
+    message: "Saved locally"
+  });
+  setDefaultJobTimes();
+  renderAll();
+}
+
+async function downloadAllAccountData() {
+  let backupData = getBackupData();
+  let accountEmail = state.cloudSession?.email || "local-only";
+  let cloudUpdatedAt = state.cloudSession?.lastSync || null;
+
+  if (state.cloudSession?.token) {
+    const payload = await cloudRequest("/api/farm");
+    backupData = payload.farm.data;
+    accountEmail = payload.email;
+    cloudUpdatedAt = payload.farm.updatedAt;
+  }
+
+  const backup = {
+    app: "Tractor Tracker",
+    exportType: "account-data",
+    version: 11,
+    exportedAt: new Date().toISOString(),
+    accountEmail,
+    cloudUpdatedAt,
+    data: backupData
+  };
+  const backupDate = new Date().toISOString().slice(0, 10);
+  downloadFile(`tractor-tracker-account-data-${backupDate}.json`, JSON.stringify(backup, null, 2), "application/json");
+}
+
 function renderCloudAccount() {
   const session = state.cloudSession;
   const isConnected = Boolean(session?.token);
@@ -934,6 +1000,9 @@ function renderCloudAccount() {
   elements.logoutAccount.hidden = !isConnected;
   elements.uploadCloud.disabled = !isConnected || !canSync;
   elements.downloadCloud.disabled = !isConnected || !canSync;
+  elements.logoutAllDevices.disabled = !isConnected;
+  elements.deleteCloudData.disabled = !isConnected;
+  elements.deleteAccount.disabled = !isConnected;
   elements.registerForm.hidden = isConnected;
   elements.loginForm.hidden = isConnected;
   elements.changePasswordForm.hidden = !isConnected;
@@ -2965,6 +3034,22 @@ elements.logoutAccount.addEventListener("click", async () => {
   showCloudMessage("Logged out.", "success");
 });
 
+elements.logoutAllDevices.addEventListener("click", async () => {
+  showCloudMessage("");
+
+  if (!window.confirm("Log out this account from every device?")) {
+    return;
+  }
+
+  try {
+    const payload = await cloudRequest("/api/logout-all", { method: "POST", body: "{}" });
+    saveCloudSession(null);
+    showCloudMessage(payload.message, "success");
+  } catch (error) {
+    showCloudMessage(error.message, "error");
+  }
+});
+
 elements.uploadCloud.addEventListener("click", async () => {
   showCloudMessage("");
 
@@ -2984,6 +3069,72 @@ elements.downloadCloud.addEventListener("click", async () => {
 
   try {
     await downloadFarmFromCloud();
+  } catch (error) {
+    showCloudMessage(error.message, "error");
+  }
+});
+
+elements.downloadAccountData.addEventListener("click", async () => {
+  showCloudMessage("");
+
+  try {
+    await downloadAllAccountData();
+    showCloudMessage("Account data downloaded.", "success");
+  } catch (error) {
+    showCloudMessage(error.message, "error");
+  }
+});
+
+elements.deleteCloudData.addEventListener("click", async () => {
+  showCloudMessage("");
+
+  if (!window.confirm("Delete all cloud records for this account? This keeps the login but clears synced data.")) {
+    return;
+  }
+
+  const password = promptForAccountPassword("delete cloud data");
+  if (password === null) {
+    return;
+  }
+
+  try {
+    const payload = await cloudRequest("/api/farm/delete-cloud", {
+      method: "POST",
+      body: JSON.stringify({ password })
+    });
+    const restoredData = normalizeRestoredBackup(payload.farm.data);
+    restoredData.settings = normalizeSettings({
+      ...restoredData.settings,
+      accountPromptComplete: true
+    });
+    restoreFarmBackup(restoredData, { source: "cloud", cloudUpdatedAt: payload.farm.updatedAt });
+    saveCloudSession(sessionFromPayload(payload));
+    showCloudMessage("Cloud data deleted. This device now has a blank synced account.", "success");
+  } catch (error) {
+    showCloudMessage(error.message, "error");
+  }
+});
+
+elements.deleteAccount.addEventListener("click", async () => {
+  showCloudMessage("");
+
+  if (!window.confirm("Delete this Tractor Tracker account and all cloud data? This cannot be undone.")) {
+    return;
+  }
+
+  const password = promptForAccountPassword("delete this account");
+  if (password === null) {
+    return;
+  }
+
+  try {
+    const payload = await cloudRequest("/api/account/delete", {
+      method: "POST",
+      body: JSON.stringify({ password })
+    });
+    saveCloudSession(null);
+    clearLocalFarmDataAfterDeletion();
+    showCloudMessage(payload.message, "success");
   } catch (error) {
     showCloudMessage(error.message, "error");
   }
@@ -3186,7 +3337,7 @@ setInterval(updateJobTimer, 1000);
 
 if (window.navigator && "serviceWorker" in window.navigator) {
   window.addEventListener("load", () => {
-    window.navigator.serviceWorker.register("sw.js?v=24").catch((error) => {
+    window.navigator.serviceWorker.register("sw.js?v=25").catch((error) => {
       console.warn("Service worker registration failed:", error);
     });
   });
