@@ -37,6 +37,7 @@ Tractor Tracker is a browser-based MVP for farmers and independent contractors w
 - Account and sync foundation with a local secure database server
 - Startup cloud account prompt for existing account login, new account creation, or local-only use
 - Login automatically downloads the account's cloud records onto the device
+- Temporary support and app-update contact email: carterc.issa@gmail.com
 - Sample data button for quick testing
 - Local browser storage
 

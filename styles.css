@@ -124,6 +124,17 @@ main {
   margin-top: 1rem;
 }
 
+.support-line {
+  margin-top: 0.5rem;
+  color: #667064;
+  font-size: 0.92rem;
+}
+
+.support-line a {
+  color: #315f36;
+  font-weight: 800;
+}
+
 .mode-options {
   display: grid;
   grid-template-columns: 1fr 1fr;

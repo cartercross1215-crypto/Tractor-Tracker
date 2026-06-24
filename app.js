@@ -3084,7 +3084,7 @@ setInterval(updateJobTimer, 1000);
 
 if (window.navigator && "serviceWorker" in window.navigator) {
   window.addEventListener("load", () => {
-    window.navigator.serviceWorker.register("sw.js?v=20").catch((error) => {
+    window.navigator.serviceWorker.register("sw.js?v=21").catch((error) => {
       console.warn("Service worker registration failed:", error);
     });
   });
