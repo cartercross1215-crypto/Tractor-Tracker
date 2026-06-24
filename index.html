@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#315f36" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Tractor Tracker" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Tractor Tracker</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <section id="mode-chooser" class="mode-chooser" hidden>
+    <div class="mode-card" role="dialog" aria-modal="true" aria-labelledby="mode-title">
+      <p class="eyebrow">Choose your setup</p>
+      <h2 id="mode-title">How will you use Tractor Tracker?</h2>
+      <p>Pick the layout you want to start with. You can change this later in Settings without deleting saved records.</p>
+      <div class="mode-options">
+        <button type="button" data-select-mode="farm">
+          <strong>Farm Work</strong>
+          <span>Fields, acres, implements, field conditions, and farm reports.</span>
+        </button>
+        <button type="button" data-select-mode="contracting">
+          <strong>Contracting</strong>
+          <span>Job sites, customers, hauling, loads, material, hours, and billing totals.</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section id="setup-wizard" class="setup-wizard" hidden>
+    <form id="first-use-form" class="setup-card" aria-labelledby="setup-title">
+      <p class="eyebrow">First setup</p>
+      <h2 id="setup-title">Build your starting records</h2>
+      <p id="setup-intro">Add the basics once, then Tractor Tracker will open on your dashboard.</p>
+      <div class="form-grid">
+        <label><span id="setup-business-label">Farm or business name</span><input id="setup-business-name" type="text" placeholder="Home Farm" required /></label>
+        <label>Measurement system<select id="setup-measurement-system">
+          <option value="us">US: miles and gallons</option>
+          <option value="metric">Metric: kilometers and liters</option>
+        </select></label>
+        <label>Report currency<select id="setup-currency-code">
+          <option value="USD">USD</option>
+          <option value="CAD">CAD</option>
+          <option value="AUD">AUD</option>
+          <option value="EUR">EUR</option>
+          <option value="GBP">GBP</option>
+        </select></label>
+        <label>First equipment<input id="setup-equipment-name" type="text" placeholder="Main Tractor" required /></label>
+        <label>Make and model<input id="setup-equipment-model" type="text" placeholder="John Deere 4440" required /></label>
+        <label>Current engine hours<input id="setup-equipment-hours" type="number" min="0" step="0.1" value="0" required /></label>
+      <label>First operator<input id="setup-operator-name" type="text" placeholder="Operator name" required /></label>
+        <label id="setup-customer-name-wrap">First customer<input id="setup-customer-name" type="text" placeholder="Customer name" /></label>
+        <label id="setup-customer-company-wrap">Customer company<input id="setup-customer-company" type="text" placeholder="Company name" /></label>
+        <label><span id="setup-field-name-label">First field</span><input id="setup-field-name" type="text" placeholder="North 80" required /></label>
+        <label><span id="setup-field-acres-label">Acres</span><input id="setup-field-acres" type="number" min="0" step="0.1" placeholder="80" /></label>
+        <label><span id="setup-implement-label">Primary implement</span><input id="setup-implement-name" type="text" placeholder="General work" /></label>
+        <label class="full-width"><span id="setup-field-notes-label">Notes</span><input id="setup-field-notes" type="text" placeholder="Soil, drainage, crop, landlord, or custom work notes" /></label>
+      </div>
+      <div class="form-actions full-width">
+        <button type="submit">Finish Setup</button>
+      </div>
+    </form>
+  </section>
+
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Track one machine free</p>
+      <h1>Tractor Tracker</h1>
+      <p id="app-subtitle">Modern field and equipment records for farms running dependable older iron.</p>
+    </div>
+    <div class="plan-panel">
+      <span id="plan-name">Free Plan</span>
+      <strong id="plan-summary">1 machine / 1 operator / 5 fields</strong>
+      <small id="sync-status" class="sync-status">Saved locally</small>
+    </div>
+  </header>
+
+  <main>
+    <section class="summary-grid" aria-label="Farm summary">
+      <article class="metric">
+        <span id="metric-hours-label">Equipment Hours</span>
+        <strong id="metric-hours">0.0</strong>
+      </article>
+      <article class="metric">
+        <span id="metric-production-label">Acres Logged</span>
+        <strong id="metric-acres">0.0</strong>
+      </article>
+      <article class="metric">
+        <span id="metric-fuel-rate-label">Fuel Per Acre</span>
+        <strong id="metric-fuel-rate">0.00</strong>
+      </article>
+      <article class="metric">
+        <span>Open Reminders</span>
+        <strong id="metric-reminders">0</strong>
+      </article>
+    </section>
+
+    <nav class="tabs" aria-label="App sections">
+      <button class="tab active" data-tab="dashboard" type="button">Dashboard</button>
+      <button class="tab" data-tab="records" type="button">Setup</button>
+      <button class="tab" data-tab="jobs" type="button">Jobs</button>
+      <button class="tab" data-tab="maintenance" type="button">Maintenance</button>
+      <button class="tab" data-tab="reports" type="button">Reports</button>
+      <button class="tab" data-tab="account" type="button">Account</button>
+    </nav>
+
+    <section id="dashboard" class="tab-panel active">
+      <div class="layout-two">
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <h2>Today's Work</h2>
+              <p id="dashboard-copy">Quick view of recent jobs, current limits, and machine status.</p>
+            </div>
+            <button id="sample-data" type="button" class="secondary-button">Load Sample</button>
+          </div>
+          <div id="recent-jobs" class="timeline"></div>
+        </section>
+
+        <aside class="panel field-map-panel">
+          <h2 id="snapshot-heading">Farm Snapshot</h2>
+          <div id="dashboard-snapshot" class="dashboard-snapshot"></div>
+          <div id="limit-status" class="limit-status"></div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="records" class="tab-panel">
+      <div class="layout-two">
+        <section class="panel">
+          <h2>Equipment Profile</h2>
+          <form id="equipment-form" class="form-grid">
+            <label>Equipment name<input id="equipment-name" type="text" placeholder="Main Tractor" required /></label>
+            <label>Make and model<input id="equipment-model" type="text" placeholder="John Deere 4440" required /></label>
+            <label>Year<input id="equipment-year" type="number" min="1900" max="2100" placeholder="1982" /></label>
+            <label>Current engine hours<input id="equipment-hours" type="number" min="0" step="0.1" value="0" required /></label>
+            <label>Serial number<input id="equipment-serial" type="text" placeholder="Optional" /></label>
+            <label>Fuel capacity<input id="equipment-fuel-capacity" type="number" min="0" step="0.1" placeholder="Optional" /></label>
+            <label>Fuel capacity unit<select id="equipment-fuel-capacity-unit">
+              <option value="gal">Gallons</option>
+              <option value="l">Liters</option>
+            </select></label>
+            <label class="full-width">Repair notes<textarea id="equipment-notes" rows="3" placeholder="Known issues, repairs, parts to order"></textarea></label>
+            <div class="form-actions full-width">
+              <button id="save-equipment" type="submit">Save Equipment</button>
+              <button id="cancel-equipment-edit" type="button" class="secondary-button" hidden>Cancel Edit</button>
+            </div>
+          </form>
+          <div id="equipment-display" class="saved-item empty-state">No equipment saved yet.</div>
+        </section>
+
+        <section class="panel">
+          <h2 id="setup-list-heading">Operators, Implements, Fields</h2>
+          <form id="operator-form" class="inline-form">
+            <input id="operator-name" type="text" placeholder="Operator name" required />
+            <div class="form-actions">
+              <button id="save-operator" type="submit">Add Operator</button>
+              <button id="cancel-operator-edit" type="button" class="secondary-button" hidden>Cancel</button>
+            </div>
+          </form>
+          <div id="operator-list" class="chip-list"></div>
+
+          <form id="implement-form" class="inline-form">
+            <input id="implement-name" type="text" placeholder="Implement or attachment" required />
+            <div class="form-actions">
+              <button id="save-implement" type="submit">Add Implement</button>
+              <button id="cancel-implement-edit" type="button" class="secondary-button" hidden>Cancel</button>
+            </div>
+          </form>
+          <div id="implement-list" class="chip-list"></div>
+
+          <section id="customer-section" class="contracting-only">
+            <h2>Customers</h2>
+            <form id="customer-form" class="form-grid compact-form">
+              <label>Customer name<input id="customer-name" type="text" placeholder="Customer name" required /></label>
+              <label>Company<input id="customer-company" type="text" placeholder="Company name" /></label>
+              <label>Phone<input id="customer-phone" type="tel" placeholder="555-123-4567" /></label>
+              <label>Email<input id="customer-email" type="email" placeholder="customer@example.com" /></label>
+              <label>Outstanding balance<input id="customer-balance" type="number" min="0" step="0.01" placeholder="Optional" /></label>
+              <label class="full-width">Billing address<input id="customer-address" type="text" placeholder="Billing address" /></label>
+              <div class="form-actions full-width">
+                <button id="save-customer" type="submit">Add Customer</button>
+                <button id="cancel-customer-edit" type="button" class="secondary-button" hidden>Cancel Edit</button>
+              </div>
+            </form>
+            <div id="customer-list" class="list"></div>
+          </section>
+
+          <form id="field-form" class="form-grid compact-form">
+            <label id="field-customer-wrap">Customer<select id="field-customer"></select></label>
+            <label><span id="field-name-label">Field name</span><input id="field-name" type="text" placeholder="North 80" required /></label>
+            <label><span id="field-acres-label">Acres</span><input id="field-acres" type="number" min="0" step="0.1" placeholder="80" required /></label>
+            <label class="full-width"><span id="field-notes-label">Notes</span><input id="field-notes" type="text" placeholder="Soil, drainage, crop, landlord, or custom work notes" /></label>
+            <div class="form-actions full-width">
+              <button id="save-field" type="submit">Add Field</button>
+              <button id="cancel-field-edit" type="button" class="secondary-button" hidden>Cancel Edit</button>
+            </div>
+          </form>
+          <div id="field-list" class="list"></div>
+        </section>
+      </div>
+    </section>
+
+    <section id="jobs" class="tab-panel">
+      <section class="panel">
+        <h2 id="job-form-heading">Log Fieldwork</h2>
+        <div id="job-timer" class="job-timer" aria-live="polite">
+          <div>
+            <span class="timer-label">Job Timer</span>
+            <strong id="job-timer-elapsed">Ready</strong>
+            <p id="job-timer-summary">Choose the field, machine, implement, operator, and job type before starting.</p>
+          </div>
+          <div class="timer-actions">
+            <button id="start-job" type="button">Start Job</button>
+            <button id="finish-job" type="button" class="secondary-button" disabled>Finish Job</button>
+            <button id="cancel-job" type="button" class="ghost-button" disabled>Cancel</button>
+          </div>
+        </div>
+        <form id="job-form" class="form-grid">
+          <label><span id="job-location-label">Field</span><select id="job-field" required></select></label>
+          <label>Equipment<select id="job-equipment" required></select></label>
+          <label><span id="job-implement-label">Implement</span><select id="job-implement" required></select></label>
+          <label>Operator<select id="job-operator" required></select></label>
+          <label>Job type<select id="job-type" required>
+            <option value="">Choose a job</option>
+            <option>Planting</option>
+            <option>Tilling</option>
+            <option>Spraying</option>
+            <option>Fertilizing</option>
+            <option>Harvesting</option>
+            <option>Mowing</option>
+            <option>Baling</option>
+            <option>Disking</option>
+            <option>Hauling</option>
+            <option>Trucking</option>
+            <option>Custom job</option>
+          </select></label>
+          <label>Start time<input id="job-start" type="datetime-local" step="1" required /></label>
+          <label>End time<input id="job-end" type="datetime-local" step="1" required /></label>
+          <label><span id="job-acres-label">Acres completed</span><input id="job-acres" type="number" min="0" step="0.1" /></label>
+          <label>Distance hauled<input id="job-distance" type="number" min="0" step="0.1" placeholder="Optional" /></label>
+          <label>Distance unit<select id="job-distance-unit">
+            <option value="mi">Miles</option>
+            <option value="km">Kilometers</option>
+          </select></label>
+          <label>Fuel used<input id="job-fuel" type="number" min="0" step="0.1" value="0" required /></label>
+          <label>Fuel unit<select id="job-fuel-unit">
+            <option value="gal">Gallons</option>
+            <option value="l">Liters</option>
+          </select></label>
+          <label><span id="job-conditions-label">Field conditions</span><input id="job-conditions" type="text" placeholder="Dry, damp, rough, heavy residue" /></label>
+          <label>Weather<input id="job-weather" type="text" placeholder="Sunny, 72F, light wind" /></label>
+          <label><span id="job-cost-hour-label">Operating cost/hour</span><input id="job-cost-hour" type="number" min="0" step="0.01" placeholder="Optional" /></label>
+          <label><span id="job-cost-distance-label">Cost per mile</span><input id="job-cost-distance" type="number" min="0" step="0.01" placeholder="Optional" /></label>
+          <label id="job-loads-wrap">Loads hauled<input id="job-loads" type="number" min="0" step="1" placeholder="Optional" /></label>
+          <label id="job-material-wrap">Material type<input id="job-material" type="text" placeholder="Gravel, dirt, lime, mulch" /></label>
+          <label class="full-width">Notes<textarea id="job-notes" rows="3" placeholder="Repairs, breakdowns, plugging, parts, or billing notes"></textarea></label>
+          <div class="form-actions full-width">
+            <button id="save-job" type="submit">Save Job</button>
+            <button id="cancel-job-edit" type="button" class="secondary-button" hidden>Cancel Edit</button>
+          </div>
+        </form>
+        <p id="job-message" class="message" aria-live="polite"></p>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <h2>Job History</h2>
+            <p>Saved on this device until cloud backup is added.</p>
+          </div>
+          <button id="clear-jobs" type="button" class="danger-button">Clear Jobs</button>
+        </div>
+        <div id="job-list" class="list"></div>
+      </section>
+    </section>
+
+    <section id="maintenance" class="tab-panel">
+      <div class="layout-two">
+        <section class="panel">
+          <h2>Maintenance Reminder</h2>
+          <form id="maintenance-form" class="form-grid">
+            <label>Equipment<select id="maintenance-equipment" required></select></label>
+            <label>Service item<input id="maintenance-name" type="text" placeholder="Oil change" required /></label>
+            <label>Due at engine hours<input id="maintenance-hours" type="number" min="0" step="0.1" required /></label>
+            <label>Due date<input id="maintenance-date" type="date" /></label>
+            <label>Estimated cost<input id="maintenance-cost" type="number" min="0" step="0.01" placeholder="Optional" /></label>
+            <label class="full-width">Notes<input id="maintenance-notes" type="text" placeholder="Filters, oil type, grease points, inspection notes" /></label>
+            <div class="form-actions full-width">
+              <button id="save-maintenance" type="submit">Add Reminder</button>
+              <button id="cancel-maintenance-edit" type="button" class="secondary-button" hidden>Cancel Edit</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel">
+          <h2>Reminder List</h2>
+          <div id="maintenance-list" class="list"></div>
+        </section>
+      </div>
+    </section>
+
+    <section id="reports" class="tab-panel">
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <h2>Reports and Calculations</h2>
+            <p>Use these numbers for planning, billing, recordkeeping, and taxes.</p>
+          </div>
+          <div class="form-actions">
+            <button id="export-csv" type="button">Export Job CSV</button>
+            <button id="export-maintenance-csv" type="button" class="secondary-button">Export Maintenance CSV</button>
+          </div>
+        </div>
+        <div id="report-grid" class="report-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <h2>App Settings</h2>
+            <p>Choose the app mode, units, and report currency.</p>
+          </div>
+        </div>
+        <form id="settings-form" class="form-grid">
+          <label><span id="settings-business-label">Farm or business name</span><input id="settings-business-name" type="text" placeholder="Home Farm" /></label>
+          <label>App mode<select id="app-mode">
+            <option value="farm">Farm Work</option>
+            <option value="contracting">Contracting</option>
+          </select></label>
+          <label>Measurement system<select id="measurement-system">
+            <option value="us">US: miles and gallons</option>
+            <option value="metric">Metric: kilometers and liters</option>
+          </select></label>
+          <label>Report currency<select id="currency-code">
+            <option value="USD">USD</option>
+            <option value="CAD">CAD</option>
+            <option value="AUD">AUD</option>
+            <option value="EUR">EUR</option>
+            <option value="GBP">GBP</option>
+          </select></label>
+          <div class="form-actions full-width">
+            <button type="submit">Save Settings</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <h2>Backup and Restore</h2>
+            <p>Save all records to a JSON backup file or restore a saved farm file.</p>
+          </div>
+          <div class="form-actions">
+            <button id="download-backup" type="button">Download Farm Backup</button>
+            <button id="restore-backup" type="button" class="secondary-button">Restore Farm Backup</button>
+          </div>
+        </div>
+        <input id="restore-backup-file" class="visually-hidden" type="file" accept="application/json,.json" />
+        <p id="backup-message" class="message" aria-live="polite"></p>
+      </section>
+    </section>
+
+    <section id="account" class="tab-panel">
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <h2>Subscription</h2>
+            <p id="subscription-status">Free plan is active.</p>
+          </div>
+          <span class="status-pill" id="subscription-price">$0/month</span>
+        </div>
+        <div class="plan-grid">
+          <article class="plan-card" id="free-plan-card">
+            <span>Free</span>
+            <strong>$0/month</strong>
+            <p>One machine, one operator, five fields or job sites, local storage, and basic reports.</p>
+            <button id="use-free-plan" type="button" class="secondary-button">Use Free Plan</button>
+          </article>
+          <article class="plan-card" id="farm-plan-card">
+            <span>Unlimited</span>
+            <strong>$9.99/month</strong>
+            <p>Unlimited machines, fields, operators, cloud backup, device syncing, advanced reports, and full export tools.</p>
+            <button id="activate-farm-plan" type="button">Activate Unlimited</button>
+          </article>
+        </div>
+        <p class="muted-text">Payment processing is not connected yet. This switch sets the plan level for testing the subscription limits.</p>
+      </section>
+
+      <div class="layout-two">
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <h2>Farm Account</h2>
+              <p id="cloud-status">Local-only mode. Start the Tractor Tracker server to use accounts and sync.</p>
+            </div>
+            <button id="logout-account" type="button" class="secondary-button" hidden>Log Out</button>
+          </div>
+
+          <form id="register-form" class="form-grid">
+            <label>Farm name<input id="register-farm" type="text" placeholder="Home Farm" required /></label>
+            <label>Email<input id="register-email" type="email" placeholder="farmer@example.com" required /></label>
+            <label>Password<input id="register-password" type="password" minlength="8" required /></label>
+            <div class="form-actions full-width">
+              <button type="submit">Create Account</button>
+            </div>
+          </form>
+
+          <form id="login-form" class="form-grid compact-form">
+            <label>Email<input id="login-email" type="email" placeholder="farmer@example.com" required /></label>
+            <label>Password<input id="login-password" type="password" required /></label>
+            <div class="form-actions full-width">
+              <button type="submit">Log In</button>
+            </div>
+          </form>
+          <p id="cloud-message" class="message" aria-live="polite"></p>
+        </section>
+
+        <section class="panel">
+          <h2>Cloud Sync</h2>
+          <div class="saved-item">
+            <p><strong>Farm:</strong> <span id="cloud-farm-name">Not connected</span></p>
+            <p><strong>Account:</strong> <span id="cloud-account-email">Not connected</span></p>
+            <p><strong>Status:</strong> <span id="cloud-sync-status">Saved locally</span></p>
+            <p><strong>Last sync:</strong> <span id="cloud-last-sync">Never</span></p>
+          </div>
+          <div class="form-actions compact-form">
+            <button id="upload-cloud" type="button" disabled>Upload This Device</button>
+            <button id="download-cloud" type="button" class="secondary-button" disabled>Download Cloud Copy</button>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
