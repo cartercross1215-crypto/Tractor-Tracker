@@ -41,6 +41,8 @@ Tractor Tracker is a browser-based MVP for farmers and independent contractors w
 - Logged-in password change with confirmation and session logout
 - Privacy Policy, Terms of Service, and data deletion instructions inside the Account section
 - Account controls for data download, cloud-data deletion, account deletion, and logging out all devices
+- Clearer sync controls with last-saved time, last-synced time, retry sync, offline/unsynced warnings, and conflict choices
+- Contractor invoices with customer/job-site work, hours, equipment, distance, loads, materials, rates, tax, paid/unpaid status, and printable invoice output
 - Temporary support and app-update contact email: carterc.issa@gmail.com
 - Sample data button for quick testing
 - Local browser storage
@@ -73,8 +75,8 @@ See `DEPLOYMENT.md` for the hosting checklist.
 
 ## Current limitations
 
-This is still a prototype. It now includes an account/sync server, automatic sync logic, hosted cloud account flow, hosting-ready server settings, Free Unlimited Beta plan access, and password reset hooks, but real payment processing, production email provider configuration, photos, documents, and GPS tracking are not added yet. Data is saved in the browser immediately and syncs later when the sync server is available.
+This is still a prototype. It now includes an account/sync server, automatic sync logic, hosted cloud account flow, hosting-ready server settings, Free Unlimited Beta plan access, password reset hooks, clearer sync controls, and contractor invoice records, but real payment processing, production email provider configuration, photos, documents, and GPS tracking are not added yet. Data is saved in the browser immediately and syncs later when the sync server is available.
 
 ## Paid plan direction
 
-The paid version is modeled as the Unlimited plan at about $9.99/month. Real payment checkout, subscription webhooks, invoices, and hosted customer billing still need to be connected before public launch.
+The paid version is modeled as the Unlimited plan at about $9.99/month. Real payment checkout, subscription webhooks, and hosted customer billing still need to be connected before public launch.

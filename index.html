@@ -9,14 +9,14 @@
   <meta name="apple-mobile-web-app-title" content="Tractor Tracker" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Tractor Tracker</title>
-  <link rel="manifest" href="manifest.webmanifest?v=25" />
+  <link rel="manifest" href="manifest.webmanifest?v=26" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png" />
   <link rel="apple-touch-icon" sizes="167x167" href="icons/apple-touch-icon-167.png" />
   <link rel="apple-touch-icon" sizes="152x152" href="icons/apple-touch-icon-152.png" />
-  <link rel="stylesheet" href="styles.css?v=25" />
+  <link rel="stylesheet" href="styles.css?v=26" />
 </head>
 <body>
   <section id="account-chooser" class="account-chooser" hidden>
@@ -381,6 +381,34 @@
         <div id="report-grid" class="report-grid"></div>
       </section>
 
+      <section id="invoice-section" class="panel">
+        <div class="section-heading">
+          <div>
+            <h2>Contractor Invoices</h2>
+            <p>Create printable invoices from saved customers, job sites, hours, distance, loads, materials, and equipment.</p>
+          </div>
+        </div>
+        <form id="invoice-form" class="form-grid">
+          <label>Customer<select id="invoice-customer" required></select></label>
+          <label>Invoice number<input id="invoice-number" type="text" placeholder="Auto" /></label>
+          <label>Hourly charge<input id="invoice-hourly-rate" type="number" min="0" step="0.01" placeholder="0.00" /></label>
+          <label><span id="invoice-distance-rate-label">Per-mile charge</span><input id="invoice-distance-rate" type="number" min="0" step="0.01" placeholder="0.00" /></label>
+          <label>Per-load charge<input id="invoice-load-rate" type="number" min="0" step="0.01" placeholder="0.00" /></label>
+          <label>Material charge<input id="invoice-material-charge" type="number" min="0" step="0.01" placeholder="0.00" /></label>
+          <label>Equipment charge<input id="invoice-equipment-charge" type="number" min="0" step="0.01" placeholder="0.00" /></label>
+          <label>Tax percent<input id="invoice-tax-rate" type="number" min="0" step="0.01" placeholder="0" /></label>
+          <label>Paid status<select id="invoice-paid-status">
+            <option value="unpaid">Unpaid</option>
+            <option value="paid">Paid</option>
+          </select></label>
+          <div class="form-actions full-width">
+            <button type="submit">Create Invoice</button>
+          </div>
+        </form>
+        <p id="invoice-message" class="message" aria-live="polite"></p>
+        <div id="invoice-list" class="list"></div>
+      </section>
+
       <section class="panel">
         <div class="section-heading">
           <div>
@@ -492,12 +520,20 @@
             <p><strong>Account:</strong> <span id="cloud-account-email">Not connected</span></p>
             <p><strong>Status:</strong> <span id="cloud-sync-status">Saved locally</span></p>
             <p><strong>Last sync:</strong> <span id="cloud-last-sync">Never</span></p>
+            <p><strong>Local save:</strong> <span id="cloud-local-save">Never</span></p>
+            <p id="sync-detail">Saved locally on this device.</p>
+            <p id="sync-warning" class="message" aria-live="polite"></p>
           </div>
           <div class="form-actions compact-form">
+            <button id="retry-sync" type="button" class="secondary-button" disabled>Retry Sync</button>
             <button id="upload-cloud" type="button" disabled>Upload This Device</button>
             <button id="download-cloud" type="button" class="secondary-button" disabled>Download Cloud Copy</button>
             <button id="download-account-data" type="button" class="secondary-button">Download All Data</button>
             <button id="logout-all-devices" type="button" class="ghost-button" disabled>Log Out All Devices</button>
+          </div>
+          <div id="sync-conflict-actions" class="form-actions compact-form" hidden>
+            <button id="use-cloud-copy" type="button" class="secondary-button">Use Cloud Copy</button>
+            <button id="keep-device-copy" type="button">Keep This Device</button>
           </div>
         </section>
 
@@ -546,6 +582,6 @@
     </section>
   </main>
 
-  <script src="app.js?v=25"></script>
+  <script src="app.js?v=26"></script>
 </body>
 </html>

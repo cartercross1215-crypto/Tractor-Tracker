@@ -5,6 +5,7 @@ const STORAGE_KEYS = {
   operators: "fieldwork-operators-v2",
   implements: "fieldwork-implements-v2",
   jobs: "fieldwork-jobs-v2",
+  invoices: "tractor-tracker-invoices-v1",
   activeJob: "fieldwork-active-job-v2",
   maintenance: "fieldwork-maintenance-v2",
   maintenanceHistory: "tractor-tracker-maintenance-history-v1",
@@ -117,6 +118,7 @@ const state = {
   operators: loadData(STORAGE_KEYS.operators, []),
   implements: loadData(STORAGE_KEYS.implements, []),
   jobs: loadData(STORAGE_KEYS.jobs, []),
+  invoices: loadData(STORAGE_KEYS.invoices, []),
   activeJob: loadData(STORAGE_KEYS.activeJob, null),
   maintenance: loadData(STORAGE_KEYS.maintenance, []),
   maintenanceHistory: loadData(STORAGE_KEYS.maintenanceHistory, []),
@@ -126,6 +128,8 @@ const state = {
     pending: false,
     lastLocalSaveAt: null,
     lastSyncedAt: null,
+    conflictFarm: null,
+    conflictUpdatedAt: null,
     message: "Saved locally"
   }),
   settings: loadData(STORAGE_KEYS.settings, {
@@ -189,6 +193,13 @@ const elements = {
   syncStatus: document.querySelector("#sync-status"),
   cloudSyncStatus: document.querySelector("#cloud-sync-status"),
   cloudLastSync: document.querySelector("#cloud-last-sync"),
+  cloudLocalSave: document.querySelector("#cloud-local-save"),
+  syncDetail: document.querySelector("#sync-detail"),
+  syncWarning: document.querySelector("#sync-warning"),
+  retrySync: document.querySelector("#retry-sync"),
+  syncConflictActions: document.querySelector("#sync-conflict-actions"),
+  useCloudCopy: document.querySelector("#use-cloud-copy"),
+  keepDeviceCopy: document.querySelector("#keep-device-copy"),
   planName: document.querySelector("#plan-name"),
   subscriptionStatus: document.querySelector("#subscription-status"),
   subscriptionPrice: document.querySelector("#subscription-price"),
@@ -207,6 +218,20 @@ const elements = {
   sampleData: document.querySelector("#sample-data"),
   exportCsv: document.querySelector("#export-csv"),
   exportMaintenanceCsv: document.querySelector("#export-maintenance-csv"),
+  invoiceSection: document.querySelector("#invoice-section"),
+  invoiceForm: document.querySelector("#invoice-form"),
+  invoiceCustomer: document.querySelector("#invoice-customer"),
+  invoiceNumber: document.querySelector("#invoice-number"),
+  invoiceHourlyRate: document.querySelector("#invoice-hourly-rate"),
+  invoiceDistanceRateLabel: document.querySelector("#invoice-distance-rate-label"),
+  invoiceDistanceRate: document.querySelector("#invoice-distance-rate"),
+  invoiceLoadRate: document.querySelector("#invoice-load-rate"),
+  invoiceMaterialCharge: document.querySelector("#invoice-material-charge"),
+  invoiceEquipmentCharge: document.querySelector("#invoice-equipment-charge"),
+  invoiceTaxRate: document.querySelector("#invoice-tax-rate"),
+  invoicePaidStatus: document.querySelector("#invoice-paid-status"),
+  invoiceMessage: document.querySelector("#invoice-message"),
+  invoiceList: document.querySelector("#invoice-list"),
   downloadBackup: document.querySelector("#download-backup"),
   restoreBackup: document.querySelector("#restore-backup"),
   restoreBackupFile: document.querySelector("#restore-backup-file"),
@@ -348,6 +373,8 @@ function normalizeSyncMeta(syncMeta = {}) {
     pending: Boolean(syncMeta.pending),
     lastLocalSaveAt: syncMeta.lastLocalSaveAt || null,
     lastSyncedAt: syncMeta.lastSyncedAt || null,
+    conflictFarm: syncMeta.conflictFarm || null,
+    conflictUpdatedAt: syncMeta.conflictUpdatedAt || null,
     message: syncMeta.message || "Saved locally"
   };
 }
@@ -576,6 +603,11 @@ function showResetMessage(text, type = "") {
   elements.resetMessage.className = `message ${type}`;
 }
 
+function showInvoiceMessage(text, type = "") {
+  elements.invoiceMessage.textContent = text;
+  elements.invoiceMessage.className = `message ${type}`;
+}
+
 function showPlanUpgrade(featureName) {
   const message = planUpgradeMessage(featureName);
   showBackupMessage(message, "error");
@@ -627,12 +659,63 @@ function getSyncStatusText() {
   return "Saved locally";
 }
 
+function getSyncDetailText() {
+  if (!state.cloudSession?.token) {
+    return "Saved locally on this device. Log in to sync across devices.";
+  }
+
+  if (state.syncMeta.status === "syncing") {
+    return "Syncing this device with the cloud now.";
+  }
+
+  if (state.syncMeta.status === "conflict") {
+    const cloudTime = state.syncMeta.conflictUpdatedAt ? formatSyncTime(state.syncMeta.conflictUpdatedAt) : "recently";
+    return `Another device saved newer cloud data ${cloudTime}. Choose which copy to keep.`;
+  }
+
+  if (state.syncMeta.status === "offline") {
+    return "This device is offline or the server cannot be reached. Changes are saved locally and will sync later.";
+  }
+
+  if (state.syncMeta.pending) {
+    return "Unsynced changes are saved locally and waiting to sync.";
+  }
+
+  if (state.syncMeta.lastSyncedAt) {
+    return `Last synced ${formatSyncTime(state.syncMeta.lastSyncedAt)}.`;
+  }
+
+  return "Ready to sync.";
+}
+
+function getSyncWarningText() {
+  if (state.syncMeta.status === "conflict") {
+    return "Conflict: cloud data is newer than this device.";
+  }
+
+  if (state.syncMeta.status === "offline") {
+    return "Offline -- will sync later.";
+  }
+
+  if (state.syncMeta.pending) {
+    return "Unsynced changes.";
+  }
+
+  return "";
+}
+
 function renderSyncStatus() {
   const text = getSyncStatusText();
   elements.syncStatus.textContent = text;
   elements.cloudSyncStatus.textContent = text;
+  elements.cloudLocalSave.textContent = formatSyncTime(state.syncMeta.lastLocalSaveAt);
+  elements.syncDetail.textContent = getSyncDetailText();
+  elements.syncWarning.textContent = getSyncWarningText();
+  elements.syncWarning.className = `message ${state.syncMeta.status === "synced" ? "success" : state.syncMeta.pending || state.syncMeta.status === "offline" || state.syncMeta.status === "conflict" ? "error" : ""}`;
   elements.syncStatus.dataset.status = state.syncMeta.status || "local";
   elements.cloudSyncStatus.dataset.status = state.syncMeta.status || "local";
+  elements.retrySync.disabled = !state.cloudSession?.token || state.syncMeta.status === "syncing";
+  elements.syncConflictActions.hidden = state.syncMeta.status !== "conflict";
 }
 
 function setSyncMeta(updates) {
@@ -673,6 +756,8 @@ function markLocalChange() {
     status: "local",
     pending: true,
     lastLocalSaveAt: new Date().toISOString(),
+    conflictFarm: null,
+    conflictUpdatedAt: null,
     message: "Saved locally"
   });
   scheduleAutoSync();
@@ -936,6 +1021,7 @@ function clearLocalFarmDataAfterDeletion() {
   state.operators = [];
   state.implements = [];
   state.jobs = [];
+  state.invoices = [];
   state.activeJob = null;
   state.maintenance = [];
   state.maintenanceHistory = [];
@@ -950,7 +1036,7 @@ function clearLocalFarmDataAfterDeletion() {
   });
   clearEditState();
   persistWithoutSyncTracking(() => {
-    ["equipment", "fields", "customers", "operators", "implements", "jobs", "activeJob", "maintenance", "maintenanceHistory", "settings"].forEach((key) => persist(key));
+    ["equipment", "fields", "customers", "operators", "implements", "jobs", "invoices", "activeJob", "maintenance", "maintenanceHistory", "settings"].forEach((key) => persist(key));
   });
   setSyncMeta({
     status: "local",
@@ -1222,6 +1308,8 @@ async function syncLocalChanges({ manual = false } = {}) {
       status: "synced",
       pending: false,
       lastSyncedAt: payload.farm?.updatedAt || new Date().toISOString(),
+      conflictFarm: null,
+      conflictUpdatedAt: null,
       message: "Synced"
     });
     showCloudMessage(manual ? "This device is synced." : "Synced.", "success");
@@ -1231,6 +1319,8 @@ async function syncLocalChanges({ manual = false } = {}) {
       setSyncMeta({
         status: "conflict",
         pending: true,
+        conflictFarm: error.payload?.farm || null,
+        conflictUpdatedAt: cloudUpdatedAt || null,
         message: "Cloud copy is newer"
       });
       showCloudMessage(`Cloud copy is newer${cloudUpdatedAt ? ` (${formatSyncTime(cloudUpdatedAt)})` : ""}. Download Cloud Copy before uploading this device.`, "error");
@@ -1247,6 +1337,32 @@ async function syncLocalChanges({ manual = false } = {}) {
   }
 }
 
+async function forceUploadLocalCopy() {
+  if (!isCloudSyncReady()) {
+    renderSyncStatus();
+    return;
+  }
+
+  const farmName = state.cloudSession?.farmName || state.settings.businessName || "Home Farm";
+  const payload = await cloudRequest("/api/farm", {
+    method: "POST",
+    body: JSON.stringify({
+      farmName,
+      data: getBackupData()
+    })
+  });
+  saveCloudSession(sessionFromPayload(payload));
+  setSyncMeta({
+    status: "synced",
+    pending: false,
+    lastSyncedAt: payload.farm?.updatedAt || new Date().toISOString(),
+    conflictFarm: null,
+    conflictUpdatedAt: null,
+    message: "Synced"
+  });
+  showCloudMessage("This device copy was saved to the cloud.", "success");
+}
+
 async function downloadFarmFromCloud() {
   const payload = await cloudRequest("/api/farm");
   const restoredData = normalizeRestoredBackup(payload.farm.data);
@@ -1260,6 +1376,8 @@ async function downloadFarmFromCloud() {
     status: "synced",
     pending: false,
     lastSyncedAt: payload.farm.updatedAt,
+    conflictFarm: null,
+    conflictUpdatedAt: null,
     message: "Synced"
   });
   showCloudMessage("Cloud copy downloaded to this device.", "success");
@@ -1290,6 +1408,7 @@ function getBackupData() {
     operators: state.operators,
     implements: state.implements,
     jobs: state.jobs,
+    invoices: state.invoices,
     activeJob: state.activeJob,
     maintenance: state.maintenance,
     maintenanceHistory: state.maintenanceHistory,
@@ -1335,6 +1454,7 @@ function normalizeRestoredBackup(parsedBackup) {
     operators: restoredData.operators,
     implements: restoredData.implements,
     jobs: restoredData.jobs,
+    invoices: Array.isArray(restoredData.invoices) ? restoredData.invoices : [],
     activeJob: restoredData.activeJob || null,
     maintenance: restoredData.maintenance,
     maintenanceHistory: Array.isArray(restoredData.maintenanceHistory) ? restoredData.maintenanceHistory : [],
@@ -1349,13 +1469,14 @@ function restoreFarmBackup(restoredData, options = {}) {
   state.operators = restoredData.operators;
   state.implements = restoredData.implements;
   state.jobs = restoredData.jobs;
+  state.invoices = restoredData.invoices;
   state.activeJob = restoredData.activeJob;
   state.maintenance = restoredData.maintenance;
   state.maintenanceHistory = restoredData.maintenanceHistory;
   state.settings = restoredData.settings;
   clearEditState();
   persistWithoutSyncTracking(() => {
-    ["equipment", "fields", "customers", "operators", "implements", "jobs", "activeJob", "maintenance", "maintenanceHistory", "settings"].forEach((key) => persist(key));
+    ["equipment", "fields", "customers", "operators", "implements", "jobs", "invoices", "activeJob", "maintenance", "maintenanceHistory", "settings"].forEach((key) => persist(key));
     normalizeEquipmentReferences();
   });
 
@@ -1370,6 +1491,8 @@ function restoreFarmBackup(restoredData, options = {}) {
       status: "synced",
       pending: false,
       lastSyncedAt: options.cloudUpdatedAt || new Date().toISOString(),
+      conflictFarm: null,
+      conflictUpdatedAt: null,
       message: "Synced"
     });
   } else {
@@ -1587,6 +1710,89 @@ function getJobDetails(job) {
     costPerAcre: job.acres > 0 ? cost / job.acres : 0,
     costPerMile: distanceMiles > 0 ? cost / distanceMiles : 0,
     costPerKm: distanceKm > 0 ? cost / distanceKm : 0
+  };
+}
+
+function getInvoicedJobIds() {
+  return new Set(state.invoices.flatMap((invoice) => invoice.jobIds || []));
+}
+
+function getCustomerInvoiceJobs(customerId) {
+  const customerFieldIds = new Set(state.fields.filter((field) => field.customerId === customerId).map((field) => field.id));
+  const invoicedJobIds = getInvoicedJobIds();
+  return state.jobs.filter((job) => customerFieldIds.has(job.fieldId) && !invoicedJobIds.has(job.id));
+}
+
+function nextInvoiceNumber() {
+  const year = new Date().getFullYear();
+  return `TT-${year}-${String(state.invoices.length + 1).padStart(3, "0")}`;
+}
+
+function buildInvoice(customerId, values) {
+  const customer = getCustomerById(customerId);
+  const jobs = getCustomerInvoiceJobs(customerId);
+  const distanceUnit = getPreferredDistanceUnit();
+  const hourlyRate = Number(values.hourlyRate || 0);
+  const distanceRate = Number(values.distanceRate || 0);
+  const loadRate = Number(values.loadRate || 0);
+  const materialCharge = Number(values.materialCharge || 0);
+  const equipmentCharge = Number(values.equipmentCharge || 0);
+  const taxRate = Number(values.taxRate || 0);
+
+  const lineItems = jobs.map((job) => {
+    const details = getJobDetails(job);
+    const distance = getDistanceForUnit(job, distanceUnit);
+    const loads = Number(job.loads || 0);
+    const amount = (details.duration * hourlyRate) + (distance * distanceRate) + (loads * loadRate);
+    return {
+      jobId: job.id,
+      date: job.end || job.start,
+      jobType: job.type,
+      jobSite: details.fieldName,
+      equipment: details.equipmentName,
+      hours: details.duration,
+      distance,
+      distanceUnit,
+      loads,
+      materialType: job.materialType || "",
+      amount
+    };
+  });
+
+  if (materialCharge > 0) {
+    lineItems.push({ description: "Material charge", amount: materialCharge });
+  }
+
+  if (equipmentCharge > 0) {
+    lineItems.push({ description: "Equipment charge", amount: equipmentCharge });
+  }
+
+  const subtotal = lineItems.reduce((total, item) => total + Number(item.amount || 0), 0);
+  const tax = subtotal * (taxRate / 100);
+  const total = subtotal + tax;
+
+  return {
+    id: id(),
+    number: values.number || nextInvoiceNumber(),
+    createdAt: new Date().toISOString(),
+    customerId,
+    customerName: customer?.name || "",
+    company: customer?.company || "",
+    address: customer?.address || "",
+    email: customer?.email || "",
+    jobIds: jobs.map((job) => job.id),
+    hourlyRate,
+    distanceRate,
+    distanceUnit,
+    loadRate,
+    materialCharge,
+    equipmentCharge,
+    taxRate,
+    subtotal,
+    tax,
+    total,
+    paid: values.paid,
+    lineItems
   };
 }
 
@@ -1971,6 +2177,120 @@ function renderReports() {
   `;
 }
 
+function renderInvoices() {
+  elements.invoiceSection.hidden = !isContractingMode();
+
+  if (!isContractingMode()) {
+    return;
+  }
+
+  renderSelect(elements.invoiceCustomer, state.customers, "Choose customer");
+  elements.invoiceDistanceRateLabel.textContent = `Per-${unitLabel(getPreferredDistanceUnit())} charge`;
+
+  if (!elements.invoiceNumber.value) {
+    elements.invoiceNumber.placeholder = nextInvoiceNumber();
+  }
+
+  elements.invoiceList.innerHTML = "";
+
+  if (!state.invoices.length) {
+    elements.invoiceList.innerHTML = '<div class="empty-state">No invoices created yet.</div>';
+    return;
+  }
+
+  [...state.invoices].reverse().forEach((invoice) => {
+    elements.invoiceList.insertAdjacentHTML("beforeend", `
+      <article class="list-item">
+        <div class="list-item-row">
+          <div>
+            <h3>${escapeHtml(invoice.number)}</h3>
+            <p>${escapeHtml(invoice.customerName || "Customer")} ${invoice.company ? `/ ${escapeHtml(invoice.company)}` : ""}</p>
+            <p><strong>Total:</strong> ${currency(invoice.total)} / <strong>Status:</strong> ${invoice.paid ? "Paid" : "Unpaid"} / <strong>Jobs:</strong> ${(invoice.jobIds || []).length}</p>
+            <span class="status-pill ${invoice.paid ? "done" : "warn"}">${invoice.paid ? "Paid" : "Unpaid"}</span>
+          </div>
+          <div class="item-actions">
+            <button class="small-button secondary-button" data-print-invoice="${invoice.id}" type="button">Print</button>
+            <button class="small-button secondary-button" data-toggle-invoice-paid="${invoice.id}" type="button">${invoice.paid ? "Mark Unpaid" : "Mark Paid"}</button>
+            <button class="small-button ghost-button" data-delete-invoice="${invoice.id}" type="button">Delete</button>
+          </div>
+        </div>
+      </article>
+    `);
+  });
+}
+
+function printInvoice(invoice) {
+  const rows = (invoice.lineItems || []).map((item) => {
+    const description = item.description || `${item.jobType} - ${item.jobSite}`;
+    const details = item.description
+      ? ""
+      : `${dateTime(item.date)} / ${item.equipment} / ${number(item.hours)} hrs / ${number(item.distance)} ${unitLabel(item.distanceUnit)} / ${number(item.loads || 0, 0)} loads${item.materialType ? ` / ${item.materialType}` : ""}`;
+    return `
+      <tr>
+        <td>${escapeHtml(description)}<br><small>${escapeHtml(details)}</small></td>
+        <td>${currency(item.amount)}</td>
+      </tr>
+    `;
+  }).join("");
+
+  const invoiceHtml = `
+    <!doctype html>
+    <html>
+      <head>
+        <title>${escapeHtml(invoice.number)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 32px; color: #20241e; }
+          header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #315f36; padding-bottom: 16px; }
+          h1 { margin: 0; }
+          table { width: 100%; border-collapse: collapse; margin-top: 24px; }
+          th, td { border-bottom: 1px solid #dce3d5; padding: 10px; text-align: left; vertical-align: top; }
+          th:last-child, td:last-child { text-align: right; }
+          .totals { margin-left: auto; width: 320px; }
+          .status { display: inline-block; padding: 6px 10px; background: ${invoice.paid ? "#d9efe1" : "#fff1c7"}; }
+          @media print { button { display: none; } }
+        </style>
+      </head>
+      <body>
+        <button onclick="window.print()">Print</button>
+        <header>
+          <div>
+            <h1>Invoice ${escapeHtml(invoice.number)}</h1>
+            <p>Tractor Tracker</p>
+          </div>
+          <div>
+            <p><strong>Date:</strong> ${dateTime(invoice.createdAt)}</p>
+            <p><strong>Status:</strong> <span class="status">${invoice.paid ? "Paid" : "Unpaid"}</span></p>
+          </div>
+        </header>
+        <section>
+          <h2>Bill To</h2>
+          <p>${escapeHtml(invoice.customerName || "")}${invoice.company ? `<br>${escapeHtml(invoice.company)}` : ""}${invoice.address ? `<br>${escapeHtml(invoice.address)}` : ""}${invoice.email ? `<br>${escapeHtml(invoice.email)}` : ""}</p>
+        </section>
+        <table>
+          <thead><tr><th>Work</th><th>Amount</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <table class="totals">
+          <tbody>
+            <tr><td>Subtotal</td><td>${currency(invoice.subtotal)}</td></tr>
+            <tr><td>Tax (${number(invoice.taxRate, 2)}%)</td><td>${currency(invoice.tax)}</td></tr>
+            <tr><th>Total</th><th>${currency(invoice.total)}</th></tr>
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `;
+
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    showInvoiceMessage("Allow pop-ups to print the invoice.", "error");
+    return;
+  }
+  printWindow.document.write(invoiceHtml);
+  printWindow.document.close();
+  printWindow.focus();
+}
+
 function renderSummary() {
   const totals = getTotals();
   const mode = getModeCopy();
@@ -2013,6 +2333,7 @@ function renderAll() {
   renderDashboardSnapshot();
   renderMaintenance();
   renderReports();
+  renderInvoices();
   renderSummary();
   renderCloudAccount();
   renderSubscriptionPlan();
@@ -2572,12 +2893,13 @@ elements.firstUseForm.addEventListener("submit", (event) => {
     notes: elements.setupFieldNotes.value.trim()
   }];
   state.jobs = [];
+  state.invoices = [];
   state.activeJob = null;
   state.maintenance = [];
   state.maintenanceHistory = [];
 
   persistWithoutSyncTracking(() => {
-    ["settings", "equipment", "customers", "operators", "implements", "fields", "jobs", "activeJob", "maintenance", "maintenanceHistory"].forEach((key) => persist(key));
+    ["settings", "equipment", "customers", "operators", "implements", "fields", "jobs", "invoices", "activeJob", "maintenance", "maintenanceHistory"].forEach((key) => persist(key));
   });
   markLocalChange();
   elements.firstUseForm.reset();
@@ -2720,6 +3042,31 @@ document.addEventListener("click", (event) => {
     renderAll();
   }
 
+  if (button.dataset.printInvoice) {
+    const invoice = state.invoices.find((item) => item.id === button.dataset.printInvoice);
+    if (invoice) {
+      printInvoice(invoice);
+    }
+  }
+
+  if (button.dataset.toggleInvoicePaid) {
+    state.invoices = state.invoices.map((invoice) => (
+      invoice.id === button.dataset.toggleInvoicePaid
+        ? { ...invoice, paid: !invoice.paid }
+        : invoice
+    ));
+    persist("invoices");
+    renderAll();
+  }
+
+  if (button.dataset.deleteInvoice) {
+    if (window.confirm("Delete this invoice? Jobs will become available for a new invoice.")) {
+      state.invoices = state.invoices.filter((invoice) => invoice.id !== button.dataset.deleteInvoice);
+      persist("invoices");
+      renderAll();
+    }
+  }
+
   if (button.dataset.editJob) {
     const job = state.jobs.find((item) => item.id === button.dataset.editJob);
 
@@ -2829,8 +3176,10 @@ elements.clearJobs.addEventListener("click", () => {
   }
 
   state.jobs = [];
+  state.invoices = [];
   state.editingJobId = null;
   persist("jobs");
+  persist("invoices");
   elements.jobForm.reset();
   setDefaultJobTimes();
   renderAll();
@@ -2935,6 +3284,7 @@ elements.sampleData.addEventListener("click", () => {
     }
   ];
   state.activeJob = null;
+  state.invoices = [];
   state.editingEquipmentId = null;
   state.editingFieldId = null;
   state.editingCustomerId = null;
@@ -3074,6 +3424,56 @@ elements.downloadCloud.addEventListener("click", async () => {
   }
 });
 
+elements.retrySync.addEventListener("click", async () => {
+  showCloudMessage("");
+
+  try {
+    await syncLocalChanges({ manual: true });
+  } catch (error) {
+    showCloudMessage(error.message, "error");
+  }
+});
+
+elements.useCloudCopy.addEventListener("click", async () => {
+  showCloudMessage("");
+
+  if (!window.confirm("Use the newer cloud copy on this device? This will replace local unsynced changes.")) {
+    return;
+  }
+
+  try {
+    if (state.syncMeta.conflictFarm?.data) {
+      const restoredData = normalizeRestoredBackup(state.syncMeta.conflictFarm.data);
+      restoredData.settings = normalizeSettings({
+        ...restoredData.settings,
+        accountPromptComplete: true
+      });
+      restoreFarmBackup(restoredData, { source: "cloud", cloudUpdatedAt: state.syncMeta.conflictFarm.updatedAt });
+      saveCloudSession(sessionFromPayload({ email: state.cloudSession.email, farm: state.syncMeta.conflictFarm }));
+      showCloudMessage("Cloud copy restored to this device.", "success");
+      return;
+    }
+
+    await downloadFarmFromCloud();
+  } catch (error) {
+    showCloudMessage(error.message, "error");
+  }
+});
+
+elements.keepDeviceCopy.addEventListener("click", async () => {
+  showCloudMessage("");
+
+  if (!window.confirm("Keep this device copy and overwrite the cloud copy?")) {
+    return;
+  }
+
+  try {
+    await forceUploadLocalCopy();
+  } catch (error) {
+    showCloudMessage(error.message, "error");
+  }
+});
+
 elements.downloadAccountData.addEventListener("click", async () => {
   showCloudMessage("");
 
@@ -3083,6 +3483,40 @@ elements.downloadAccountData.addEventListener("click", async () => {
   } catch (error) {
     showCloudMessage(error.message, "error");
   }
+});
+
+elements.invoiceForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  showInvoiceMessage("");
+
+  const customerId = elements.invoiceCustomer.value;
+  if (!customerId) {
+    showInvoiceMessage("Choose a customer first.", "error");
+    return;
+  }
+
+  const jobs = getCustomerInvoiceJobs(customerId);
+  if (!jobs.length) {
+    showInvoiceMessage("No uninvoiced jobs found for that customer.", "error");
+    return;
+  }
+
+  const invoice = buildInvoice(customerId, {
+    number: elements.invoiceNumber.value.trim(),
+    hourlyRate: elements.invoiceHourlyRate.value,
+    distanceRate: elements.invoiceDistanceRate.value,
+    loadRate: elements.invoiceLoadRate.value,
+    materialCharge: elements.invoiceMaterialCharge.value,
+    equipmentCharge: elements.invoiceEquipmentCharge.value,
+    taxRate: elements.invoiceTaxRate.value,
+    paid: elements.invoicePaidStatus.value === "paid"
+  });
+
+  state.invoices.push(invoice);
+  persist("invoices");
+  elements.invoiceForm.reset();
+  renderAll();
+  showInvoiceMessage(`Invoice ${invoice.number} created.`, "success");
 });
 
 elements.deleteCloudData.addEventListener("click", async () => {
@@ -3337,7 +3771,7 @@ setInterval(updateJobTimer, 1000);
 
 if (window.navigator && "serviceWorker" in window.navigator) {
   window.addEventListener("load", () => {
-    window.navigator.serviceWorker.register("sw.js?v=25").catch((error) => {
+    window.navigator.serviceWorker.register("sw.js?v=26").catch((error) => {
       console.warn("Service worker registration failed:", error);
     });
   });

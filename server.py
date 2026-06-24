@@ -101,6 +101,7 @@ def empty_farm_data():
         "operators": [],
         "implements": [],
         "jobs": [],
+        "invoices": [],
         "activeJob": None,
         "maintenance": [],
         "maintenanceHistory": [],

@@ -242,6 +242,14 @@ main {
   color: #963a31;
 }
 
+#sync-detail {
+  margin-top: 0.35rem;
+}
+
+#sync-warning {
+  margin-top: 0.35rem;
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
