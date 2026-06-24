@@ -2,10 +2,15 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+ENV HOST=0.0.0.0
+ENV PORT=10000
+ENV TRACTOR_TRACKER_DATA_DIR=/data
+
 COPY . .
 
-ENV PORT=10000
+RUN mkdir -p /data
 
 EXPOSE 10000
+VOLUME ["/data"]
 
 CMD ["python3", "server.py"]
