@@ -1943,8 +1943,8 @@ function renderMaintenance() {
       );
       const status = isDue ? "Due now" : isCompleted ? "Done" : `${number(hoursLeft)} hours left`;
       const className = isDue ? "due" : isCompleted ? "done" : hoursLeft <= 10 ? "warn" : "";
-      const doneDisabled = isDue ? "" : `disabled title="Already marked done. Due again at ${number(item.dueHours)} engine hours."`;
-      const doneButtonText = isCompleted ? "Completed" : "Done";
+      const doneDisabled = isCompleted ? `disabled title="Already marked done. Due again at ${number(item.dueHours)} engine hours."` : "";
+      const doneButtonText = isCompleted ? "Completed" : isDue ? "Done" : "Done Early";
       const completionNote = isCompleted
         ? `<p><strong>Done:</strong> ${dateTime(latestCompletion.completedAt)} at ${number(latestCompletion.completedHours)} engine hours. Next due in ${number(hoursLeft)} hours.</p>`
         : "";
@@ -3123,15 +3123,15 @@ document.addEventListener("click", (event) => {
     button.disabled = true;
     const item = state.maintenance.find((reminder) => reminder.id === button.dataset.completeMaintenance);
     const equipment = getEquipmentById(item?.equipmentId) || getPrimaryEquipment();
+    if (!item || !equipment) {
+      window.alert("This maintenance reminder could not be completed because its equipment record is missing.");
+      button.disabled = false;
+      return;
+    }
+
     if (item && equipment) {
       const completedHours = Number(equipment.hours || 0);
       const previousDueHours = Number(item.dueHours || 0);
-
-      if (previousDueHours > completedHours) {
-        window.alert(`This maintenance item is already marked done. It can be completed again when ${equipment.name} reaches ${number(previousDueHours)} engine hours.`);
-        button.disabled = false;
-        return;
-      }
 
       const alreadyRecorded = state.maintenanceHistory.some((record) => (
         record.reminderId === item.id
@@ -3166,6 +3166,7 @@ document.addEventListener("click", (event) => {
       persist("maintenanceHistory");
       persist("maintenance");
       renderAll();
+      showBackupMessage(`${item.name} marked done.`, "success");
     }
   }
 });
@@ -3771,7 +3772,7 @@ setInterval(updateJobTimer, 1000);
 
 if (window.navigator && "serviceWorker" in window.navigator) {
   window.addEventListener("load", () => {
-    window.navigator.serviceWorker.register("sw.js?v=26").catch((error) => {
+    window.navigator.serviceWorker.register("sw.js?v=27").catch((error) => {
       console.warn("Service worker registration failed:", error);
     });
   });
