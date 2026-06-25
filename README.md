@@ -20,6 +20,7 @@ Tractor Tracker is a browser-based MVP for farmers and independent contractors w
 - Optional GPS distance tracking while an active job timer is running
 - Manual start and finish times
 - Acres, fuel, weather, field conditions, and notes
+- Current weather lookup from phone location for job records
 - Distance tracking for hauling records
 - Contractor records for customers/job sites, work hours, loads hauled, material type, billing totals, and cost per hour or mile/kilometer
 - Contracting customer records with company, phone, email, billing address, job sites, outstanding balance, and job history
@@ -44,6 +45,7 @@ Tractor Tracker is a browser-based MVP for farmers and independent contractors w
 - Account controls for data download, cloud-data deletion, account deletion, and logging out all devices
 - Clearer sync controls with last-saved time, last-synced time, retry sync, offline/unsynced warnings, and conflict choices
 - Contractor invoices with customer/job-site work, hours, equipment, distance, loads, materials, rates, tax, paid/unpaid status, and printable invoice output
+- Send Feedback form for beta bugs, sync issues, confusing screens, and feature requests
 - Temporary support and app-update contact email: carterc.issa@gmail.com
 - Sample data button for quick testing
 - Local browser storage

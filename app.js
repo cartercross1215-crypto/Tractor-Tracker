@@ -170,6 +170,7 @@ const elements = {
   implementForm: document.querySelector("#implement-form"),
   firstUseForm: document.querySelector("#first-use-form"),
   jobForm: document.querySelector("#job-form"),
+  feedbackForm: document.querySelector("#feedback-form"),
   maintenanceForm: document.querySelector("#maintenance-form"),
   settingsForm: document.querySelector("#settings-form"),
   registerForm: document.querySelector("#register-form"),
@@ -280,6 +281,11 @@ const elements = {
   jobDistance: document.querySelector("#job-distance"),
   jobDistanceUnit: document.querySelector("#job-distance-unit"),
   jobFuelUnit: document.querySelector("#job-fuel-unit"),
+  jobWeather: document.querySelector("#job-weather"),
+  useCurrentWeather: document.querySelector("#use-current-weather"),
+  feedbackType: document.querySelector("#feedback-type"),
+  feedbackDevice: document.querySelector("#feedback-device"),
+  feedbackNotes: document.querySelector("#feedback-notes"),
   measurementSystem: document.querySelector("#measurement-system"),
   currencyCode: document.querySelector("#currency-code"),
   maintenanceEquipment: document.querySelector("#maintenance-equipment")
@@ -631,6 +637,131 @@ function hidePreloader() {
   }, 220);
 }
 
+function weatherCodeLabel(code) {
+  const labels = {
+    0: "Clear",
+    1: "Mostly clear",
+    2: "Partly cloudy",
+    3: "Cloudy",
+    45: "Fog",
+    48: "Rime fog",
+    51: "Light drizzle",
+    53: "Drizzle",
+    55: "Heavy drizzle",
+    56: "Freezing drizzle",
+    57: "Heavy freezing drizzle",
+    61: "Light rain",
+    63: "Rain",
+    65: "Heavy rain",
+    66: "Freezing rain",
+    67: "Heavy freezing rain",
+    71: "Light snow",
+    73: "Snow",
+    75: "Heavy snow",
+    77: "Snow grains",
+    80: "Light showers",
+    81: "Showers",
+    82: "Heavy showers",
+    85: "Light snow showers",
+    86: "Snow showers",
+    95: "Thunderstorm",
+    96: "Thunderstorm with hail",
+    99: "Severe thunderstorm with hail"
+  };
+  return labels[Number(code)] || "Weather";
+}
+
+function windDirectionLabel(degrees) {
+  const directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  return directions[Math.round(Number(degrees || 0) / 45) % directions.length];
+}
+
+function getCurrentPosition(options = {}) {
+  return new Promise((resolve, reject) => {
+    if (!window.navigator?.geolocation) {
+      reject(new Error("Location is not available on this device."));
+      return;
+    }
+
+    window.navigator.geolocation.getCurrentPosition(resolve, reject, options);
+  });
+}
+
+async function fetchCurrentWeather() {
+  if (window.isSecureContext === false) {
+    throw new Error("Weather needs HTTPS or localhost so the phone can share location.");
+  }
+
+  const position = await getCurrentPosition({
+    enableHighAccuracy: true,
+    maximumAge: 10 * 60 * 1000,
+    timeout: 15000
+  });
+  const latitude = position.coords.latitude.toFixed(5);
+  const longitude = position.coords.longitude.toFixed(5);
+  const usesMetric = state.settings.measurementSystem === "metric";
+  const params = new URLSearchParams({
+    latitude,
+    longitude,
+    current: "temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m",
+    temperature_unit: usesMetric ? "celsius" : "fahrenheit",
+    wind_speed_unit: usesMetric ? "kmh" : "mph",
+    precipitation_unit: usesMetric ? "mm" : "inch",
+    timezone: "auto",
+    forecast_days: "1"
+  });
+  const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`);
+
+  if (!response.ok) {
+    throw new Error("Weather could not be loaded right now.");
+  }
+
+  const payload = await response.json();
+  const current = payload.current || {};
+  const units = payload.current_units || {};
+  const condition = weatherCodeLabel(current.weather_code);
+  const temp = Number(current.temperature_2m);
+  const wind = Number(current.wind_speed_10m);
+  const gust = Number(current.wind_gusts_10m);
+  const precipitation = Number(current.precipitation || 0);
+  const humidity = Number(current.relative_humidity_2m || 0);
+  const direction = windDirectionLabel(current.wind_direction_10m);
+  const parts = [
+    `${condition}, ${number(temp, 0)}${units.temperature_2m || (usesMetric ? "°C" : "°F")}`,
+    `${direction} wind ${number(wind, 0)} ${units.wind_speed_10m || (usesMetric ? "km/h" : "mph")}`,
+    gust ? `gusts ${number(gust, 0)} ${units.wind_gusts_10m || (usesMetric ? "km/h" : "mph")}` : "",
+    humidity ? `${number(humidity, 0)}% humidity` : "",
+    precipitation ? `${number(precipitation, 2)} ${units.precipitation || (usesMetric ? "mm" : "in")} precip` : ""
+  ].filter(Boolean);
+
+  return parts.join(", ");
+}
+
+function buildFeedbackMailto() {
+  const mode = getAppMode() === "contracting" ? "Contracting" : "Farm";
+  const type = elements.feedbackType.value;
+  const device = elements.feedbackDevice.value.trim() || window.navigator.userAgent;
+  const notes = elements.feedbackNotes.value.trim();
+  const subject = `Tractor Tracker feedback - ${type}`;
+  const body = [
+    `Type: ${type}`,
+    `Mode: ${mode}`,
+    `Device: ${device}`,
+    `Account: ${state.cloudSession?.email || "Not logged in"}`,
+    `Sync status: ${state.syncMeta.status || "local"}`,
+    "",
+    "What I was trying to do:",
+    notes,
+    "",
+    "What went wrong or what I want added:",
+    "",
+    "Screenshot:",
+    "Attach one here if helpful."
+  ].join("\n");
+
+  return `mailto:carterc.issa@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
 function showPlanUpgrade(featureName) {
   const message = planUpgradeMessage(featureName);
   showBackupMessage(message, "error");
@@ -857,7 +988,7 @@ function getJobFormData(jobId = id()) {
     fuel: Number(document.querySelector("#job-fuel").value),
     fuelUnit: elements.jobFuelUnit.value || getPreferredFuelUnit(),
     conditions: document.querySelector("#job-conditions").value.trim(),
-    weather: document.querySelector("#job-weather").value.trim(),
+    weather: elements.jobWeather.value.trim(),
     costPerHour: Number(document.querySelector("#job-cost-hour").value || 0),
     costPerDistance: Number(elements.jobCostDistance.value || 0),
     costDistanceUnit: elements.jobDistanceUnit.value || getPreferredDistanceUnit(),
@@ -2854,6 +2985,20 @@ elements.startGps.addEventListener("click", () => startGpsTracking());
 
 elements.stopGps.addEventListener("click", () => stopGpsTracking());
 
+elements.useCurrentWeather.addEventListener("click", async () => {
+  showMessage("Getting current weather...", "success");
+  elements.useCurrentWeather.disabled = true;
+
+  try {
+    elements.jobWeather.value = await fetchCurrentWeather();
+    showMessage("Current weather added to this job.", "success");
+  } catch (error) {
+    showMessage(error.message || "Weather could not be loaded right now.", "error");
+  } finally {
+    elements.useCurrentWeather.disabled = false;
+  }
+});
+
 elements.startJob.addEventListener("click", () => {
   showMessage("");
   const mode = getModeCopy();
@@ -3001,6 +3146,17 @@ elements.cancelJobEdit.addEventListener("click", () => {
   setDefaultJobTimes();
   renderAll();
   showMessage("Job edit canceled.", "success");
+});
+
+elements.feedbackForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  if (!elements.feedbackNotes.value.trim()) {
+    elements.feedbackNotes.focus();
+    return;
+  }
+
+  window.location.href = buildFeedbackMailto();
 });
 
 elements.maintenanceForm.addEventListener("submit", (event) => {
@@ -4093,7 +4249,7 @@ setInterval(updateJobTimer, 1000);
 
 if (window.navigator && "serviceWorker" in window.navigator) {
   window.addEventListener("load", () => {
-    window.navigator.serviceWorker.register("sw.js?v=29").catch((error) => {
+    window.navigator.serviceWorker.register("sw.js?v=30").catch((error) => {
       console.warn("Service worker registration failed:", error);
     });
   });

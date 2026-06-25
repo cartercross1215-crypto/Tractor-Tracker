@@ -9,14 +9,14 @@
   <meta name="apple-mobile-web-app-title" content="Tractor Tracker" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Tractor Tracker</title>
-  <link rel="manifest" href="manifest.webmanifest?v=29" />
+  <link rel="manifest" href="manifest.webmanifest?v=30" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png" />
   <link rel="apple-touch-icon" sizes="167x167" href="icons/apple-touch-icon-167.png" />
   <link rel="apple-touch-icon" sizes="152x152" href="icons/apple-touch-icon-152.png" />
-  <link rel="stylesheet" href="styles.css?v=29" />
+  <link rel="stylesheet" href="styles.css?v=30" />
 </head>
 <body>
   <div id="app-preloader" class="app-preloader" role="status" aria-live="polite">
@@ -335,6 +335,9 @@
           </select></label>
           <label><span id="job-conditions-label">Field conditions</span><input id="job-conditions" type="text" placeholder="Dry, damp, rough, heavy residue" /></label>
           <label>Weather<input id="job-weather" type="text" placeholder="Sunny, 72F, light wind" /></label>
+          <div class="form-actions weather-actions">
+            <button id="use-current-weather" type="button" class="secondary-button">Use Current Weather</button>
+          </div>
           <label><span id="job-cost-hour-label">Operating cost/hour</span><input id="job-cost-hour" type="number" min="0" step="0.01" placeholder="Optional" /></label>
           <label><span id="job-cost-distance-label">Cost per mile</span><input id="job-cost-distance" type="number" min="0" step="0.01" placeholder="Optional" /></label>
           <label id="job-loads-wrap">Loads hauled<input id="job-loads" type="number" min="0" step="1" placeholder="Optional" /></label>
@@ -557,6 +560,24 @@
         </section>
 
         <section class="panel">
+          <h2>Send Feedback</h2>
+          <form id="feedback-form" class="form-grid compact-form">
+            <label>Type<select id="feedback-type">
+              <option>Bug</option>
+              <option>Feature request</option>
+              <option>Confusing screen</option>
+              <option>Sync issue</option>
+            </select></label>
+            <label>Device<input id="feedback-device" type="text" placeholder="iPhone, Android, laptop, tablet" /></label>
+            <label class="full-width">What happened<textarea id="feedback-notes" rows="4" placeholder="What you were trying to do, what went wrong, and whether you use Farm or Contracting mode" required></textarea></label>
+            <p class="muted-text full-width">Add a screenshot after the email opens if one would help.</p>
+            <div class="form-actions full-width">
+              <button type="submit">Send Feedback</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel">
           <h2>Change Password</h2>
           <form id="change-password-form" class="form-grid compact-form">
             <label>Current password<input id="current-password" type="password" required /></label>
@@ -601,6 +622,6 @@
     </section>
   </main>
 
-  <script src="app.js?v=29"></script>
+  <script src="app.js?v=30"></script>
 </body>
 </html>

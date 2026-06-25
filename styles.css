@@ -660,6 +660,10 @@ label {
   justify-content: flex-end;
 }
 
+.weather-actions {
+  align-self: end;
+}
+
 .danger-zone {
   border-color: #efc5bf;
 }
