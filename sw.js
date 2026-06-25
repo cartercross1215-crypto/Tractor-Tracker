@@ -1,10 +1,10 @@
-const CACHE_NAME = "tractor-tracker-v28";
+const CACHE_NAME = "tractor-tracker-v29";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=28",
-  "./app.js?v=28",
-  "./manifest.webmanifest?v=28",
+  "./styles.css?v=29",
+  "./app.js?v=29",
+  "./manifest.webmanifest?v=29",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/apple-touch-icon.png",

@@ -619,6 +619,18 @@ function showInvoiceMessage(text, type = "") {
   elements.invoiceMessage.className = `message ${type}`;
 }
 
+function hidePreloader() {
+  const preloader = document.querySelector("#app-preloader");
+  if (!preloader) {
+    return;
+  }
+
+  preloader.classList.add("is-hidden");
+  window.setTimeout(() => {
+    preloader.hidden = true;
+  }, 220);
+}
+
 function showPlanUpgrade(featureName) {
   const message = planUpgradeMessage(featureName);
   showBackupMessage(message, "error");
@@ -4076,11 +4088,12 @@ normalizeEquipmentReferences();
 setDefaultJobTimes();
 renderAll();
 switchTab(document.querySelector(".tab.active")?.dataset.tab || "dashboard");
+hidePreloader();
 setInterval(updateJobTimer, 1000);
 
 if (window.navigator && "serviceWorker" in window.navigator) {
   window.addEventListener("load", () => {
-    window.navigator.serviceWorker.register("sw.js?v=28").catch((error) => {
+    window.navigator.serviceWorker.register("sw.js?v=29").catch((error) => {
       console.warn("Service worker registration failed:", error);
     });
   });
