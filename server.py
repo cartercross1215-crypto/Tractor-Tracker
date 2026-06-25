@@ -12,6 +12,7 @@ from email.message import EmailMessage
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 try:
     import psycopg
@@ -56,6 +57,50 @@ def token_hash(token):
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def postgres_connect_url():
+    if not DATABASE_URL:
+        return ""
+    userinfo = DATABASE_URL.split("//", 1)[-1].split("@", 1)[0]
+    password = userinfo.split(":", 1)[1] if ":" in userinfo else ""
+    if "[" in password or "]" in password:
+        raise RuntimeError("DATABASE_URL password has square brackets. Remove [ and ] from the password in Render.")
+    parsed = urlsplit(DATABASE_URL)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query.setdefault("sslmode", "require")
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment))
+
+
+def database_url_summary():
+    if not DATABASE_URL:
+        return f"SQLite fallback at {DB_PATH}"
+    try:
+        raw_userinfo = DATABASE_URL.split("//", 1)[-1].split("@", 1)[0]
+        raw_username, _, raw_password = raw_userinfo.partition(":")
+        if "[" in raw_password or "]" in raw_password:
+            return (
+                "Supabase/Postgres DATABASE_URL "
+                f"user={raw_username or '(missing)'} host=(unreadable) port=(unreadable) "
+                f"password_set={'yes' if bool(raw_password) else 'no'} "
+                "password_has_brackets=yes placeholder_present=no"
+            )
+        parsed = urlsplit(DATABASE_URL)
+        userinfo, _, hostinfo = parsed.netloc.rpartition("@")
+        username, _, password = userinfo.partition(":")
+        host = hostinfo.split(":", 1)[0] or "(missing)"
+        port = hostinfo.split(":", 1)[1] if ":" in hostinfo else "(missing)"
+        has_brackets = "[" in password or "]" in password
+        has_placeholder = "YOUR-PASSWORD" in DATABASE_URL
+        return (
+            "Supabase/Postgres DATABASE_URL "
+            f"user={username or '(missing)'} host={host} port={port} "
+            f"password_set={'yes' if bool(password) else 'no'} "
+            f"password_has_brackets={'yes' if has_brackets else 'no'} "
+            f"placeholder_present={'yes' if has_placeholder else 'no'}"
+        )
+    except ValueError as error:
+        return f"DATABASE_URL format problem: {error}"
+
+
 class Database:
     def __init__(self):
         self.connection = None
@@ -64,7 +109,7 @@ class Database:
         if USE_POSTGRES:
             if psycopg is None:
                 raise RuntimeError("DATABASE_URL is set, but psycopg is not installed.")
-            self.connection = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+            self.connection = psycopg.connect(postgres_connect_url(), row_factory=dict_row)
         else:
             DB_PATH.parent.mkdir(parents=True, exist_ok=True)
             self.connection = sqlite3.connect(DB_PATH)
@@ -585,6 +630,7 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
 
 
 def main():
+    print(database_url_summary())
     init_db()
     port = int(os.environ.get("PORT") or os.environ.get("TRACTOR_TRACKER_PORT") or "8000")
     host = os.environ.get("HOST") or ("0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")
