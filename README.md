@@ -17,6 +17,7 @@ Tractor Tracker is a browser-based MVP for farmers and independent contractors w
 - Edit controls for jobs, fields, operators, implements, equipment, and maintenance reminders
 - Fieldwork job logging
 - Active job timer with Start Job and Finish Job controls
+- Optional GPS distance tracking while an active job timer is running
 - Manual start and finish times
 - Acres, fuel, weather, field conditions, and notes
 - Distance tracking for hauling records
@@ -75,7 +76,7 @@ See `DEPLOYMENT.md` for the hosting checklist.
 
 ## Current limitations
 
-This is still a prototype. It now includes an account/sync server, automatic sync logic, hosted cloud account flow, hosting-ready server settings, Supabase/Postgres database support, Free Unlimited Beta plan access, password reset hooks, clearer sync controls, and contractor invoice records, but real payment processing, production email provider configuration, photos, documents, and GPS tracking are not added yet. Data is saved in the browser immediately and syncs later when the sync server is available.
+This is still a prototype. It now includes an account/sync server, automatic sync logic, hosted cloud account flow, hosting-ready server settings, Supabase/Postgres database support, Free Unlimited Beta plan access, password reset hooks, clearer sync controls, contractor invoice records, and optional GPS distance tracking, but real payment processing, production email provider configuration, photos, and documents are not added yet. Data is saved in the browser immediately and syncs later when the sync server is available.
 
 ## Paid plan direction
 

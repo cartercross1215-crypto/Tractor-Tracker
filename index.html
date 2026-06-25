@@ -9,14 +9,14 @@
   <meta name="apple-mobile-web-app-title" content="Tractor Tracker" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Tractor Tracker</title>
-  <link rel="manifest" href="manifest.webmanifest?v=27" />
+  <link rel="manifest" href="manifest.webmanifest?v=28" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png" />
   <link rel="apple-touch-icon" sizes="167x167" href="icons/apple-touch-icon-167.png" />
   <link rel="apple-touch-icon" sizes="152x152" href="icons/apple-touch-icon-152.png" />
-  <link rel="stylesheet" href="styles.css?v=27" />
+  <link rel="stylesheet" href="styles.css?v=28" />
 </head>
 <body>
   <section id="account-chooser" class="account-chooser" hidden>
@@ -280,6 +280,18 @@
             <button id="start-job" type="button">Start Job</button>
             <button id="finish-job" type="button" class="secondary-button" disabled>Finish Job</button>
             <button id="cancel-job" type="button" class="ghost-button" disabled>Cancel</button>
+          </div>
+        </div>
+        <div id="gps-panel" class="gps-panel" hidden>
+          <div>
+            <span class="timer-label">GPS Distance</span>
+            <strong id="gps-distance">0.0 mi</strong>
+            <p id="gps-status">GPS is ready for the active job.</p>
+            <p id="gps-points" class="muted-text"></p>
+          </div>
+          <div class="gps-actions">
+            <button id="start-gps" type="button" class="secondary-button" disabled>Start GPS</button>
+            <button id="stop-gps" type="button" class="ghost-button" disabled>Stop GPS</button>
           </div>
         </div>
         <form id="job-form" class="form-grid">
@@ -582,6 +594,6 @@
     </section>
   </main>
 
-  <script src="app.js?v=27"></script>
+  <script src="app.js?v=28"></script>
 </body>
 </html>

@@ -566,6 +566,35 @@ label {
   background: #eef6e8;
 }
 
+.gps-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: -0.25rem 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #bac8af;
+  border-radius: 8px;
+  background: #f7f8f3;
+}
+
+.gps-panel strong {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 1.35rem;
+}
+
+.gps-panel p {
+  margin-top: 0.25rem;
+}
+
+.gps-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
+}
+
 .timer-label {
   display: block;
   color: #667064;
@@ -714,11 +743,13 @@ button:disabled {
 
   .section-heading,
   .list-item-row,
-  .job-timer {
+  .job-timer,
+  .gps-panel {
     flex-direction: column;
   }
 
-  .timer-actions {
+  .timer-actions,
+  .gps-actions {
     width: 100%;
   }
 
@@ -732,7 +763,8 @@ button:disabled {
   .ghost-button,
   .form-actions button,
   .item-actions button,
-  .timer-actions button {
+  .timer-actions button,
+  .gps-actions button {
     width: 100%;
   }
 }

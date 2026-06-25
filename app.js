@@ -51,6 +51,9 @@ const UNIT_FACTORS = {
 };
 
 const AUTO_SYNC_DELAY_MS = 1200;
+const GPS_MAX_ACCURACY_METERS = 120;
+const GPS_MIN_STEP_METERS = 8;
+const METERS_PER_MILE = 1609.344;
 
 const APP_MODES = {
   farm: {
@@ -154,6 +157,8 @@ let autoSyncTimer = null;
 let isAutoSyncing = false;
 let suppressSyncTracking = false;
 let passwordResetToken = new URLSearchParams(window.location.search).get("reset");
+let gpsWatchId = null;
+let pendingFinishedGpsSummary = null;
 
 const elements = {
   tabs: document.querySelectorAll(".tab"),
@@ -256,6 +261,12 @@ const elements = {
   startJob: document.querySelector("#start-job"),
   finishJob: document.querySelector("#finish-job"),
   cancelJob: document.querySelector("#cancel-job"),
+  gpsPanel: document.querySelector("#gps-panel"),
+  gpsDistance: document.querySelector("#gps-distance"),
+  gpsStatus: document.querySelector("#gps-status"),
+  gpsPoints: document.querySelector("#gps-points"),
+  startGps: document.querySelector("#start-gps"),
+  stopGps: document.querySelector("#stop-gps"),
   jobField: document.querySelector("#job-field"),
   fieldCustomer: document.querySelector("#field-customer"),
   jobEquipment: document.querySelector("#job-equipment"),
@@ -840,7 +851,8 @@ function getJobFormData(jobId = id()) {
     costDistanceUnit: elements.jobDistanceUnit.value || getPreferredDistanceUnit(),
     loads: Number(elements.jobLoads.value || 0),
     materialType: elements.jobMaterial.value.trim(),
-    notes: document.querySelector("#job-notes").value.trim()
+    notes: document.querySelector("#job-notes").value.trim(),
+    gpsSummary: pendingFinishedGpsSummary || state.jobs.find((job) => job.id === jobId)?.gpsSummary || null
   };
 }
 
@@ -1015,6 +1027,8 @@ function promptForAccountPassword(actionName) {
 }
 
 function clearLocalFarmDataAfterDeletion() {
+  stopGpsTracking({ markStopped: false, silent: true });
+  pendingFinishedGpsSummary = null;
   state.equipment = [];
   state.fields = [];
   state.customers = [];
@@ -1022,7 +1036,9 @@ function clearLocalFarmDataAfterDeletion() {
   state.implements = [];
   state.jobs = [];
   state.invoices = [];
+  stopGpsTracking({ markStopped: false, silent: true });
   state.activeJob = null;
+  pendingFinishedGpsSummary = null;
   state.maintenance = [];
   state.maintenanceHistory = [];
   state.settings = normalizeSettings({
@@ -1400,6 +1416,26 @@ function clearEditState() {
   elements.maintenanceForm.reset();
 }
 
+function getBackupActiveJob() {
+  if (!state.activeJob) {
+    return null;
+  }
+
+  if (!state.activeJob.gps) {
+    return state.activeJob;
+  }
+
+  return {
+    ...state.activeJob,
+    gps: {
+      ...normalizeGps(state.activeJob.gps),
+      enabled: false,
+      lastPoint: null,
+      lastError: ""
+    }
+  };
+}
+
 function getBackupData() {
   return {
     equipment: state.equipment,
@@ -1409,7 +1445,7 @@ function getBackupData() {
     implements: state.implements,
     jobs: state.jobs,
     invoices: state.invoices,
-    activeJob: state.activeJob,
+    activeJob: getBackupActiveJob(),
     maintenance: state.maintenance,
     maintenanceHistory: state.maintenanceHistory,
     settings: state.settings
@@ -1455,7 +1491,10 @@ function normalizeRestoredBackup(parsedBackup) {
     implements: restoredData.implements,
     jobs: restoredData.jobs,
     invoices: Array.isArray(restoredData.invoices) ? restoredData.invoices : [],
-    activeJob: restoredData.activeJob || null,
+    activeJob: restoredData.activeJob ? {
+      ...restoredData.activeJob,
+      gps: normalizeGps({ ...restoredData.activeJob.gps, enabled: false })
+    } : null,
     maintenance: restoredData.maintenance,
     maintenanceHistory: Array.isArray(restoredData.maintenanceHistory) ? restoredData.maintenanceHistory : [],
     settings: normalizeSettings(restoredData.settings || {})
@@ -1463,6 +1502,8 @@ function normalizeRestoredBackup(parsedBackup) {
 }
 
 function restoreFarmBackup(restoredData, options = {}) {
+  stopGpsTracking({ markStopped: false, silent: true });
+  pendingFinishedGpsSummary = null;
   state.equipment = restoredData.equipment;
   state.fields = restoredData.fields;
   state.customers = restoredData.customers;
@@ -1810,6 +1851,239 @@ function getActiveJobNames(job) {
   };
 }
 
+function normalizeGps(gps = {}) {
+  return {
+    enabled: Boolean(gps.enabled),
+    distanceMiles: Number(gps.distanceMiles || 0),
+    pointCount: Number(gps.pointCount || 0),
+    startedAt: gps.startedAt || null,
+    stoppedAt: gps.stoppedAt || null,
+    lastPoint: gps.lastPoint || null,
+    lastUpdatedAt: gps.lastUpdatedAt || null,
+    lastAccuracy: Number(gps.lastAccuracy || 0),
+    lastError: gps.lastError || ""
+  };
+}
+
+function gpsIsAvailable() {
+  return Boolean(window.navigator?.geolocation) && window.isSecureContext !== false;
+}
+
+function gpsDistanceBetweenPoints(pointA, pointB) {
+  const radiusMeters = 6371000;
+  const lat1 = pointA.latitude * Math.PI / 180;
+  const lat2 = pointB.latitude * Math.PI / 180;
+  const deltaLat = (pointB.latitude - pointA.latitude) * Math.PI / 180;
+  const deltaLng = (pointB.longitude - pointA.longitude) * Math.PI / 180;
+  const a = Math.sin(deltaLat / 2) ** 2
+    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+  return 2 * radiusMeters * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function buildGpsSummary(job) {
+  const gps = normalizeGps(job?.gps);
+  if (!gps.pointCount && !gps.distanceMiles) {
+    return null;
+  }
+
+  return {
+    distanceMiles: gps.distanceMiles,
+    pointCount: gps.pointCount,
+    startedAt: gps.startedAt,
+    stoppedAt: gps.stoppedAt || new Date().toISOString(),
+    lastAccuracy: gps.lastAccuracy || null
+  };
+}
+
+function renderGpsPanel() {
+  const isActive = Boolean(state.activeJob);
+  elements.gpsPanel.hidden = !isActive;
+
+  if (!isActive) {
+    elements.gpsDistance.textContent = `0.0 ${unitLabel(getPreferredDistanceUnit())}`;
+    elements.gpsStatus.textContent = "GPS is ready for the active job.";
+    elements.gpsPoints.textContent = "";
+    elements.startGps.disabled = true;
+    elements.stopGps.disabled = true;
+    return;
+  }
+
+  const gps = normalizeGps(state.activeJob.gps);
+  const unit = elements.jobDistanceUnit.value || getPreferredDistanceUnit();
+  const distance = milesToDistance(gps.distanceMiles, unit);
+  elements.gpsDistance.textContent = `${number(distance, 2)} ${unitLabel(unit)}`;
+  elements.startGps.disabled = !gpsIsAvailable() || gpsWatchId !== null;
+  elements.stopGps.disabled = gpsWatchId === null;
+
+  if (!gpsIsAvailable()) {
+    elements.gpsStatus.textContent = "GPS needs location permission and HTTPS.";
+  } else if (gpsWatchId !== null) {
+    elements.gpsStatus.textContent = gps.lastAccuracy
+      ? `Tracking. Last accuracy about ${number(gps.lastAccuracy, 0)} meters.`
+      : "Tracking. Waiting for the first GPS point.";
+  } else if (gps.enabled) {
+    elements.gpsStatus.textContent = "GPS paused. Start GPS to resume this job.";
+  } else if (gps.distanceMiles > 0) {
+    elements.gpsStatus.textContent = "GPS stopped. Distance will be added when this job is finished.";
+  } else {
+    elements.gpsStatus.textContent = "GPS is ready for the active job.";
+  }
+
+  if (gps.lastError) {
+    elements.gpsStatus.textContent = gps.lastError;
+  }
+
+  elements.gpsPoints.textContent = gps.pointCount
+    ? `${number(gps.pointCount, 0)} GPS points${gps.lastUpdatedAt ? ` / Last update ${dateTime(gps.lastUpdatedAt)}` : ""}`
+    : "";
+}
+
+function updateActiveJobGps(gps) {
+  if (!state.activeJob) {
+    return;
+  }
+
+  state.activeJob = {
+    ...state.activeJob,
+    gps
+  };
+  persist("activeJob");
+  renderGpsPanel();
+}
+
+function handleGpsPosition(position) {
+  if (!state.activeJob) {
+    stopGpsTracking({ markStopped: false, silent: true });
+    return;
+  }
+
+  const accuracy = Number(position.coords.accuracy || 0);
+  const gps = normalizeGps(state.activeJob.gps);
+
+  if (accuracy && accuracy > GPS_MAX_ACCURACY_METERS) {
+    updateActiveJobGps({
+      ...gps,
+      lastAccuracy: accuracy,
+      lastError: `GPS accuracy is low (${number(accuracy, 0)} meters). Waiting for a better signal.`
+    });
+    return;
+  }
+
+  const point = {
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    accuracy,
+    timestamp: new Date(position.timestamp || Date.now()).toISOString()
+  };
+
+  let distanceMiles = gps.distanceMiles;
+  let pointCount = gps.pointCount;
+  let acceptedPoint = !gps.lastPoint;
+
+  if (gps.lastPoint) {
+    const stepMeters = gpsDistanceBetweenPoints(gps.lastPoint, point);
+    if (stepMeters >= GPS_MIN_STEP_METERS) {
+      distanceMiles += stepMeters / METERS_PER_MILE;
+      acceptedPoint = true;
+    }
+  }
+
+  if (!acceptedPoint) {
+    renderGpsPanel();
+    return;
+  }
+
+  pointCount += 1;
+  updateActiveJobGps({
+    ...gps,
+    enabled: true,
+    distanceMiles,
+    pointCount,
+    startedAt: gps.startedAt || point.timestamp,
+    stoppedAt: null,
+    lastPoint: point,
+    lastUpdatedAt: point.timestamp,
+    lastAccuracy: accuracy,
+    lastError: ""
+  });
+}
+
+function handleGpsError(error) {
+  const gps = normalizeGps(state.activeJob?.gps);
+  const message = error.code === error.PERMISSION_DENIED
+    ? "Location permission was denied. Turn on location access to use GPS distance."
+    : "GPS signal is unavailable right now.";
+
+  if (state.activeJob) {
+    updateActiveJobGps({
+      ...gps,
+      enabled: false,
+      lastError: message
+    });
+  }
+  stopGpsTracking({ markStopped: false, silent: true });
+  showMessage(message, "error");
+}
+
+function startGpsTracking({ silent = false } = {}) {
+  if (!state.activeJob) {
+    showMessage("Start a job timer before starting GPS.", "error");
+    return;
+  }
+
+  if (!gpsIsAvailable()) {
+    showMessage("GPS needs location permission and HTTPS.", "error");
+    renderGpsPanel();
+    return;
+  }
+
+  if (gpsWatchId !== null) {
+    renderGpsPanel();
+    return;
+  }
+
+  const gps = normalizeGps(state.activeJob.gps);
+  updateActiveJobGps({
+    ...gps,
+    enabled: true,
+    startedAt: gps.startedAt || new Date().toISOString(),
+    stoppedAt: null,
+    lastError: ""
+  });
+
+  gpsWatchId = window.navigator.geolocation.watchPosition(handleGpsPosition, handleGpsError, {
+    enableHighAccuracy: true,
+    maximumAge: 5000,
+    timeout: 15000
+  });
+  renderGpsPanel();
+
+  if (!silent) {
+    showMessage("GPS tracking started.", "success");
+  }
+}
+
+function stopGpsTracking({ markStopped = true, silent = false } = {}) {
+  if (gpsWatchId !== null && window.navigator?.geolocation) {
+    window.navigator.geolocation.clearWatch(gpsWatchId);
+  }
+  gpsWatchId = null;
+
+  if (state.activeJob?.gps && markStopped) {
+    updateActiveJobGps({
+      ...normalizeGps(state.activeJob.gps),
+      enabled: false,
+      stoppedAt: new Date().toISOString()
+    });
+  } else {
+    renderGpsPanel();
+  }
+
+  if (!silent) {
+    showMessage("GPS tracking stopped.", "success");
+  }
+}
+
 function lockJobSetup(isLocked) {
   [
     elements.jobField,
@@ -1856,11 +2130,13 @@ function updateJobTimer() {
   const start = new Date(state.activeJob.start);
   elements.jobTimerElapsed.textContent = formatElapsed(Date.now() - start.getTime());
   elements.jobTimerSummary.textContent = `${state.activeJob.type} at ${names.fieldName} with ${names.equipmentName} and ${names.implementName}. ${names.operatorName} started at ${dateTime(state.activeJob.start)}.`;
+  renderGpsPanel();
 }
 
 function renderActiveJobTimer() {
   syncActiveJobForm();
   updateJobTimer();
+  renderGpsPanel();
 }
 
 function renderJobs() {
@@ -1884,6 +2160,9 @@ function renderJobs() {
     const contractorLine = isContractingMode() && contractorDetails
       ? `<p>${contractorDetails}</p>`
       : "";
+    const gpsLine = job.gpsSummary
+      ? `<p><strong>GPS:</strong> ${number(milesToDistance(job.gpsSummary.distanceMiles, job.distanceUnit || getPreferredDistanceUnit()), 2)} ${unitLabel(job.distanceUnit || getPreferredDistanceUnit())} from ${number(job.gpsSummary.pointCount || 0, 0)} points</p>`
+      : "";
     const customerLine = isContractingMode() && (details.customerName || details.customerCompany)
       ? `<p><strong>Customer:</strong> ${escapeHtml(details.customerName || details.customerCompany)}${details.customerCompany && details.customerCompany !== details.customerName ? ` / ${escapeHtml(details.customerCompany)}` : ""}</p>`
       : "";
@@ -1902,6 +2181,7 @@ function renderJobs() {
             ${contractorLine}
             ${costLine}
             ${distanceLine}
+            ${gpsLine}
             ${job.conditions || job.weather ? `<p><strong>Conditions:</strong> ${escapeHtml(job.conditions || "Not entered")} / ${escapeHtml(job.weather || "Weather not entered")}</p>` : ""}
             ${job.notes ? `<p><strong>Notes:</strong> ${escapeHtml(job.notes)}</p>` : ""}
           </div>
@@ -2553,11 +2833,19 @@ elements.cancelFieldEdit.addEventListener("click", () => {
   renderAll();
 });
 
-elements.jobDistanceUnit.addEventListener("change", renderAppModeContent);
+elements.jobDistanceUnit.addEventListener("change", () => {
+  renderAppModeContent();
+  renderGpsPanel();
+});
+
+elements.startGps.addEventListener("click", () => startGpsTracking());
+
+elements.stopGps.addEventListener("click", () => stopGpsTracking());
 
 elements.startJob.addEventListener("click", () => {
   showMessage("");
   const mode = getModeCopy();
+  pendingFinishedGpsSummary = null;
 
   if (state.editingJobId) {
     showMessage("Finish or cancel the job edit before starting a timer.", "error");
@@ -2591,7 +2879,8 @@ elements.startJob.addEventListener("click", () => {
     implementId: elements.jobImplement.value,
     operatorId: elements.jobOperator.value,
     type: elements.jobType.value,
-    start: toDateTimeLocal(new Date())
+    start: toDateTimeLocal(new Date()),
+    gps: normalizeGps()
   };
   persist("activeJob");
   renderAll();
@@ -2603,7 +2892,9 @@ elements.finishJob.addEventListener("click", () => {
     return;
   }
 
+  stopGpsTracking({ markStopped: true, silent: true });
   const finishedJob = state.activeJob;
+  const gpsSummary = buildGpsSummary(finishedJob);
   const startDate = new Date(finishedJob.start);
   const endDate = new Date(Math.max(Date.now(), startDate.getTime() + 1000));
   const end = toDateTimeLocal(endDate);
@@ -2618,8 +2909,19 @@ elements.finishJob.addEventListener("click", () => {
   elements.jobType.value = finishedJob.type;
   elements.jobStart.value = finishedJob.start;
   elements.jobEnd.value = end;
+  pendingFinishedGpsSummary = gpsSummary;
+
+  if (gpsSummary?.distanceMiles > 0) {
+    const unit = getPreferredDistanceUnit();
+    elements.jobDistanceUnit.value = unit;
+    elements.jobDistance.value = number(milesToDistance(gpsSummary.distanceMiles, unit), 2);
+  }
+
   (isContractingMode() ? elements.jobLoads : elements.jobAcres).focus();
-  showMessage(isContractingMode() ? "Job timer finished. Add loads, fuel, material, and notes, then save the job." : "Job timer finished. Add acres, fuel, and notes, then save the job.", "success");
+  const gpsText = gpsSummary?.distanceMiles > 0
+    ? ` GPS added ${number(milesToDistance(gpsSummary.distanceMiles, getPreferredDistanceUnit()), 2)} ${unitLabel(getPreferredDistanceUnit())}.`
+    : "";
+  showMessage(isContractingMode() ? `Job timer finished.${gpsText} Add loads, fuel, material, and notes, then save the job.` : `Job timer finished.${gpsText} Add acres, fuel, and notes, then save the job.`, "success");
 });
 
 elements.cancelJob.addEventListener("click", () => {
@@ -2627,7 +2929,9 @@ elements.cancelJob.addEventListener("click", () => {
     return;
   }
 
+  stopGpsTracking({ markStopped: false, silent: true });
   state.activeJob = null;
+  pendingFinishedGpsSummary = null;
   persist("activeJob");
   renderAll();
   setDefaultJobTimes();
@@ -2671,6 +2975,7 @@ elements.jobForm.addEventListener("submit", (event) => {
   persist("equipment");
 
   state.editingJobId = null;
+  pendingFinishedGpsSummary = null;
   elements.jobForm.reset();
   setDefaultJobTimes();
   renderAll();
@@ -2679,6 +2984,7 @@ elements.jobForm.addEventListener("submit", (event) => {
 
 elements.cancelJobEdit.addEventListener("click", () => {
   state.editingJobId = null;
+  pendingFinishedGpsSummary = null;
   elements.jobForm.reset();
   setDefaultJobTimes();
   renderAll();
@@ -3284,7 +3590,9 @@ elements.sampleData.addEventListener("click", () => {
       notes: contractorMode ? "Six loads delivered and spread ticket numbers in notebook." : "Hauling seed tender and parts run."
     }
   ];
+  stopGpsTracking({ markStopped: false, silent: true });
   state.activeJob = null;
+  pendingFinishedGpsSummary = null;
   state.invoices = [];
   state.editingEquipmentId = null;
   state.editingFieldId = null;
@@ -3772,7 +4080,7 @@ setInterval(updateJobTimer, 1000);
 
 if (window.navigator && "serviceWorker" in window.navigator) {
   window.addEventListener("load", () => {
-    window.navigator.serviceWorker.register("sw.js?v=27").catch((error) => {
+    window.navigator.serviceWorker.register("sw.js?v=28").catch((error) => {
       console.warn("Service worker registration failed:", error);
     });
   });
