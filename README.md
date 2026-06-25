@@ -65,17 +65,17 @@ For accounts and sync, run the included server instead:
 python3 server.py
 ```
 
-Then open `http://127.0.0.1:8000`. The server stores accounts and farm data in `tractor_tracker.db` using SQLite, password hashing, and session tokens.
+Then open `http://127.0.0.1:8000`. Without `DATABASE_URL`, the server stores accounts and farm data in `tractor_tracker.db` using SQLite, password hashing, and session tokens. With `DATABASE_URL`, it stores account and sync data in Supabase/Postgres.
 
 ## Host it online
 
-Tractor Tracker can now run on an online Python or Docker web host so the app works without this Mac running. Use the included `Dockerfile`, `render.yaml`, or start command `python3 server.py`, attach a persistent disk for the SQLite database, and set `HOST=0.0.0.0`.
+Tractor Tracker can now run on an online Python or Docker web host so the app works without this Mac running. Use the included `Dockerfile`, `render.yaml`, or start command `python3 server.py`, set `HOST=0.0.0.0`, and add Supabase/Postgres as `DATABASE_URL`. If `DATABASE_URL` is missing, it falls back to SQLite and needs a persistent disk.
 
 See `DEPLOYMENT.md` for the hosting checklist.
 
 ## Current limitations
 
-This is still a prototype. It now includes an account/sync server, automatic sync logic, hosted cloud account flow, hosting-ready server settings, Free Unlimited Beta plan access, password reset hooks, clearer sync controls, and contractor invoice records, but real payment processing, production email provider configuration, photos, documents, and GPS tracking are not added yet. Data is saved in the browser immediately and syncs later when the sync server is available.
+This is still a prototype. It now includes an account/sync server, automatic sync logic, hosted cloud account flow, hosting-ready server settings, Supabase/Postgres database support, Free Unlimited Beta plan access, password reset hooks, clearer sync controls, and contractor invoice records, but real payment processing, production email provider configuration, photos, documents, and GPS tracking are not added yet. Data is saved in the browser immediately and syncs later when the sync server is available.
 
 ## Paid plan direction
 

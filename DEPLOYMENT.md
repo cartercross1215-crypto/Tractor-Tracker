@@ -6,11 +6,13 @@ This app is now ready to run on an online host so Tractor Tracker works from any
 
 - A Python web service or Docker web service
 - HTTPS
-- A persistent disk or volume for the database
+- Supabase/Postgres for permanent account and sync data
+- A persistent disk or volume only if you are using the fallback SQLite database
 - These environment settings:
   - `HOST=0.0.0.0`
   - `PORT` should be the port your host provides
-  - `TRACTOR_TRACKER_DATA_DIR` should point to the persistent disk, such as `/data`
+  - `DATABASE_URL` should be the Supabase Postgres connection string
+  - `TRACTOR_TRACKER_DATA_DIR` should point to the persistent disk, such as `/data`, if `DATABASE_URL` is not set
 
 ## Start command
 
@@ -24,16 +26,17 @@ Or deploy with the included `Dockerfile` on a Docker host.
 
 ## Recommended first host: Render
 
-Render is a good first deploy target for this version because it supports Docker web services and persistent disks. Tractor Tracker needs that persistent disk so accounts, sync data, and farm records survive restarts.
+Render is a good first deploy target for this version because it supports Docker web services and secret environment variables. Supabase should hold the permanent database. The persistent disk is only needed as a fallback when `DATABASE_URL` is not configured.
 
 1. Put this project in a GitHub repo.
 2. In Render, choose **New Blueprint**.
 3. Connect the GitHub repo.
 4. Render will read `render.yaml`.
 5. Confirm the `tractor-tracker` web service.
-6. Keep the persistent disk mounted at `/data`.
-7. Deploy.
-8. Open the `onrender.com` address Render gives you.
+6. Add `DATABASE_URL` using the Supabase shared pooler connection string.
+7. Keep the persistent disk mounted at `/data` only if you want SQLite fallback storage.
+8. Deploy.
+9. Open the `onrender.com` address Render gives you.
 
 The included `render.yaml` sets:
 
@@ -42,10 +45,13 @@ The included `render.yaml` sets:
 - `/api/health` health check
 - `/data` persistent disk
 - `TRACTOR_TRACKER_DATA_DIR=/data`
+- `DATABASE_URL` secret placeholder for Supabase/Postgres
 
 ## Database
 
-Tractor Tracker stores accounts and synced farm data in SQLite. Online hosting must use a persistent disk so the database is not erased when the service restarts.
+Tractor Tracker stores accounts and synced farm data in Supabase/Postgres when `DATABASE_URL` is set. If `DATABASE_URL` is missing, it falls back to SQLite and must use a persistent disk so the database is not erased when the service restarts.
+
+For Render, use the Supabase shared pooler **Session mode** connection string because it works on IPv4-only hosting for persistent web services. In Supabase, open the project, click **Connect**, choose the Session pooler connection string, paste in the database password, and save it in Render as `DATABASE_URL`.
 
 The local test files below should not be uploaded unless you are intentionally moving test data:
 

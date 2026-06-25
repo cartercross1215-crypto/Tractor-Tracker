@@ -6,6 +6,9 @@ ENV HOST=0.0.0.0
 ENV PORT=10000
 ENV TRACTOR_TRACKER_DATA_DIR=/data
 
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
 COPY . .
 
 RUN mkdir -p /data

@@ -13,6 +13,8 @@ services:
         value: https://tractor-tracker-yboz.onrender.com
       - key: TRACTOR_TRACKER_SUPPORT_EMAIL
         value: carterc.issa@gmail.com
+      - key: DATABASE_URL
+        sync: false
     disk:
       name: tractor-tracker-data
       mountPath: /data
