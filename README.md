@@ -4,10 +4,10 @@ Tractor Tracker is a browser-based MVP for farmers and independent contractors w
 
 ## What is included
 
-- One-machine free plan workflow
-- Free Unlimited Beta plan label for public testing
-- Free Unlimited Beta access: unlimited machines, fields/job sites, operators, cloud backup, syncing, advanced reports, exports, backups, and full export tools
-- Local-first automatic sync with Saved locally, Synced, Offline, and conflict-safe status messages
+- Basic Local signed-out workflow with one machine, one operator, five fields/job sites, local records, and basic reports
+- Server-connected Basic Local mode for login, signup, and password reset without syncing records
+- Free Unlimited Beta access for signed-in accounts: unlimited machines, fields/job sites, operators, cloud backup, syncing, advanced reports, exports, backups, and full export tools
+- Local-first automatic sync with Basic Local, Synced, Offline, and conflict-safe status messages
 - Startup mode choice for Farm Work or Contracting
 - First-use setup flow for farm/business name, units, currency, first equipment, first operator, and first field or job site
 - Live dashboard using saved fields/job sites, weekly work totals, active jobs, maintenance, distance, loads, and estimated revenue
@@ -78,7 +78,7 @@ See `DEPLOYMENT.md` for the hosting checklist.
 
 ## Current limitations
 
-This is still a prototype. It now includes an account/sync server, automatic sync logic, hosted cloud account flow, hosting-ready server settings, Supabase/Postgres database support, Free Unlimited Beta plan access, password reset hooks with SMTP support, clearer sync controls, contractor invoice records, and optional GPS distance tracking, but real payment processing, photos, and documents are not added yet. Data is saved in the browser immediately and syncs later when the sync server is available.
+This is still a prototype. It now includes Basic Local signed-out access, an account/sync server, automatic sync logic, hosted cloud account flow, hosting-ready server settings, Supabase/Postgres database support, Free Unlimited Beta plan access for signed-in accounts, password reset hooks with SMTP support, clearer sync controls, contractor invoice records, and optional GPS distance tracking, but real payment processing, photos, and documents are not added yet. Data is saved in the browser immediately and syncs later when the sync server is available and the user is logged in.
 
 ## Paid plan direction
 

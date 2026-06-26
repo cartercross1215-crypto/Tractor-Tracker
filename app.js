@@ -16,22 +16,22 @@ const STORAGE_KEYS = {
 
 const SUBSCRIPTION_PLANS = {
   free: {
-    name: "Free Unlimited Beta",
-    price: "Beta",
+    name: "Basic Local",
+    price: "$0",
     limits: {
-      equipment: Infinity,
-      operators: Infinity,
-      fields: Infinity
+      equipment: 1,
+      operators: 1,
+      fields: 5
     },
     features: {
-      advancedReports: true,
-      exportTools: true,
-      cloudSync: true
+      advancedReports: false,
+      exportTools: false,
+      cloudSync: false
     }
   },
   farm: {
-    name: "Unlimited",
-    price: "$9.99/month",
+    name: "Free Unlimited Beta",
+    price: "Beta",
     limits: {
       equipment: Infinity,
       operators: Infinity,
@@ -159,6 +159,7 @@ let suppressSyncTracking = false;
 let passwordResetToken = new URLSearchParams(window.location.search).get("reset");
 let gpsWatchId = null;
 let pendingFinishedGpsSummary = null;
+let serverConnectionStatus = "checking";
 
 const elements = {
   tabs: document.querySelectorAll(".tab"),
@@ -463,7 +464,7 @@ function shouldShowPasswordResetScreen() {
 }
 
 function getActivePlanKey() {
-  return state.settings.subscriptionPlan === "farm" ? "farm" : "free";
+  return state.cloudSession?.token ? "farm" : "free";
 }
 
 function getActivePlan() {
@@ -488,7 +489,7 @@ function isAtPlanLimit(listName) {
 }
 
 function planUpgradeMessage(featureName) {
-  return `${featureName} is available during the Free Unlimited Beta.`;
+  return `${featureName} needs a Tractor Tracker account. Log in to sync this device and use Free Unlimited Beta.`;
 }
 
 function currency(value) {
@@ -785,9 +786,21 @@ function isBrowserOffline() {
   return window.navigator && window.navigator.onLine === false;
 }
 
+function getBasicServerStatusText() {
+  if (serverConnectionStatus === "online") {
+    return "Basic Local - Server Connected";
+  }
+
+  if (serverConnectionStatus === "offline") {
+    return "Basic Local - Server Offline";
+  }
+
+  return "Basic Local";
+}
+
 function getSyncStatusText() {
   if (!state.cloudSession?.token) {
-    return "Saved locally";
+    return getBasicServerStatusText();
   }
 
   if (state.syncMeta.status === "syncing") {
@@ -815,7 +828,15 @@ function getSyncStatusText() {
 
 function getSyncDetailText() {
   if (!state.cloudSession?.token) {
-    return "Saved locally on this device. Log in to sync across devices.";
+    if (serverConnectionStatus === "online") {
+      return "Basic Local is connected for login, signup, and password reset. Log in to sync records and unlock Free Unlimited Beta.";
+    }
+
+    if (serverConnectionStatus === "offline") {
+      return "Basic Local is saved on this device only. The server is not reachable right now, so login and password reset may not work.";
+    }
+
+    return "Basic Local is checking the server for login, signup, and password reset.";
   }
 
   if (state.syncMeta.status === "syncing") {
@@ -870,6 +891,31 @@ function renderSyncStatus() {
   elements.cloudSyncStatus.dataset.status = state.syncMeta.status || "local";
   elements.retrySync.disabled = !state.cloudSession?.token || state.syncMeta.status === "syncing";
   elements.syncConflictActions.hidden = state.syncMeta.status !== "conflict";
+}
+
+async function checkServerConnection() {
+  if (isCloudSyncReady()) {
+    serverConnectionStatus = "online";
+    renderSyncStatus();
+    return;
+  }
+
+  if (isBrowserOffline()) {
+    serverConnectionStatus = "offline";
+    renderSyncStatus();
+    renderCloudAccount();
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/health", { cache: "no-store" });
+    serverConnectionStatus = response.ok ? "online" : "offline";
+  } catch (error) {
+    serverConnectionStatus = "offline";
+  }
+
+  renderSyncStatus();
+  renderCloudAccount();
 }
 
 function setSyncMeta(updates) {
@@ -1100,6 +1146,9 @@ function formatSyncTime(value) {
 
 function saveCloudSession(session) {
   state.cloudSession = session;
+  if (session?.token) {
+    serverConnectionStatus = "online";
+  }
   persist("cloudSession");
   renderAll();
 
@@ -1237,8 +1286,11 @@ function renderCloudAccount() {
   const isConnected = Boolean(session?.token);
   const canSync = true;
   const registerFarm = document.querySelector("#register-farm");
+  const signedOutStatus = serverConnectionStatus === "online"
+    ? "Basic Local is connected to the server for login, signup, and password reset. Log in to sync records."
+    : "Basic Local is saved on this device. Connect to the server to log in, sign up, or reset a password.";
   elements.cloudStatus.textContent = canSync
-    ? (isConnected ? "Connected to Tractor Tracker cloud sync." : "Log in or create an account to sync this device.")
+    ? (isConnected ? "Connected to Tractor Tracker cloud sync." : signedOutStatus)
     : planUpgradeMessage("Cloud backup and device syncing");
   elements.cloudFarmName.textContent = session?.farmName || "Not connected";
   elements.cloudAccountEmail.textContent = session?.email || "Not connected";
@@ -1259,10 +1311,14 @@ function renderCloudAccount() {
 }
 
 function renderSubscriptionPlan() {
-  elements.subscriptionPrice.textContent = "Beta";
-  elements.subscriptionStatus.textContent = "Free Unlimited Beta is active. Unlimited records, reports, exports, backups, and cloud sync are open during beta.";
-  elements.freePlanCard.classList.add("active-plan");
-  elements.farmPlanCard.hidden = true;
+  const isConnected = isCloudSyncReady();
+  elements.subscriptionPrice.textContent = isConnected ? "Beta" : "$0";
+  elements.subscriptionStatus.textContent = isConnected
+    ? "Free Unlimited Beta is active. Unlimited records, reports, exports, backups, and cloud sync are open during beta."
+    : "Basic Local is active. You can use starter records on this device, and the server can still handle login, signup, and password reset.";
+  elements.freePlanCard.classList.toggle("active-plan", !isConnected);
+  elements.farmPlanCard.hidden = false;
+  elements.farmPlanCard.classList.toggle("active-plan", isConnected);
   elements.activateFarmPlan.hidden = true;
   elements.useFreePlan.disabled = true;
   elements.activateFarmPlan.disabled = true;
@@ -1397,7 +1453,11 @@ async function cloudRequest(path, options = {}) {
   let response;
   try {
     response = await fetch(path, { ...options, headers });
+    serverConnectionStatus = "online";
   } catch (error) {
+    serverConnectionStatus = "offline";
+    renderSyncStatus();
+    renderCloudAccount();
     throw new Error("Could not reach the Tractor Tracker server. If you are testing locally, start server.py and open the app from the server address.");
   }
 
@@ -2535,7 +2595,7 @@ function renderReports() {
   const costPerDistance = displayDistance > 0 ? totals.cost / displayDistance : 0;
   const distanceUnit = getPreferredDistanceUnit();
   const fuelUnit = getPreferredFuelUnit();
-  const upgradeCard = '<article class="report-card locked-card"><span>Unlimited</span><strong>Advanced reports</strong><p>Unlock fuel economy, cost per distance, billing totals, and full export tools.</p></article>';
+  const upgradeCard = '<article class="report-card locked-card"><span>Account required</span><strong>Advanced reports</strong><p>Log in for Free Unlimited Beta to use fuel economy, cost per distance, billing totals, and full export tools.</p></article>';
 
   if (isContractingMode()) {
     const fuelPerHour = totals.hours > 0 ? displayFuel / totals.hours : 0;
@@ -2740,7 +2800,7 @@ function renderSummary() {
     <p>Equipment: ${state.equipment.length}/${formatLimit(equipmentLimit)}</p>
     <p>Operators: ${state.operators.length}/${formatLimit(operatorLimit)}</p>
     <p>${mode.locationPlural[0].toUpperCase()}${mode.locationPlural.slice(1)}: ${state.fields.length}/${formatLimit(fieldLimit)}</p>
-    <p><strong>Unlimited:</strong> unlimited equipment, ${mode.locationPlural}, operators, advanced reports, cloud backup, device syncing, and full export tools.</p>
+    <p><strong>Free Unlimited Beta:</strong> log in for unlimited equipment, ${mode.locationPlural}, operators, advanced reports, cloud backup, device syncing, and full export tools.</p>
   `;
 }
 
@@ -3399,7 +3459,7 @@ elements.useFreePlan.addEventListener("click", () => {
   });
   persist("settings");
   renderAll();
-  showCloudMessage("Free Unlimited Beta is active.", "success");
+  showCloudMessage(isCloudSyncReady() ? "Free Unlimited Beta is active." : "Basic Local is active on this device.", "success");
 });
 
 elements.activateFarmPlan.addEventListener("click", () => {
@@ -3876,7 +3936,14 @@ elements.logoutAccount.addEventListener("click", async () => {
   }
 
   saveCloudSession(null);
-  showCloudMessage("Logged out.", "success");
+  state.settings = normalizeSettings({
+    ...state.settings,
+    accountPromptComplete: false
+  });
+  saveData(STORAGE_KEYS.settings, state.settings);
+  renderAll();
+  checkServerConnection();
+  showCloudMessage("Logged out. Basic Local is active until you log in again.", "success");
 });
 
 elements.logoutAllDevices.addEventListener("click", async () => {
@@ -3889,6 +3956,13 @@ elements.logoutAllDevices.addEventListener("click", async () => {
   try {
     const payload = await cloudRequest("/api/logout-all", { method: "POST", body: "{}" });
     saveCloudSession(null);
+    state.settings = normalizeSettings({
+      ...state.settings,
+      accountPromptComplete: false
+    });
+    saveData(STORAGE_KEYS.settings, state.settings);
+    renderAll();
+    checkServerConnection();
     showCloudMessage(payload.message, "success");
   } catch (error) {
     showCloudMessage(error.message, "error");
@@ -4264,22 +4338,27 @@ renderAll();
 switchTab(document.querySelector(".tab.active")?.dataset.tab || "dashboard");
 hidePreloader();
 setInterval(updateJobTimer, 1000);
+checkServerConnection();
 
 if (window.navigator && "serviceWorker" in window.navigator) {
   window.addEventListener("load", () => {
-    window.navigator.serviceWorker.register("sw.js?v=31").catch((error) => {
+    window.navigator.serviceWorker.register("sw.js?v=32").catch((error) => {
       console.warn("Service worker registration failed:", error);
     });
   });
 }
 
 window.addEventListener("online", () => {
+  checkServerConnection();
   if (state.syncMeta.pending) {
     scheduleAutoSync();
   }
 });
 
 window.addEventListener("offline", () => {
+  serverConnectionStatus = "offline";
+  renderSyncStatus();
+  renderCloudAccount();
   if (state.syncMeta.pending && isCloudSyncReady()) {
     setSyncMeta({
       status: "offline",
