@@ -22,6 +22,7 @@ except ImportError:
     dict_row = None
 
 
+APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("TRACTOR_TRACKER_DATA_DIR", "."))
 DB_PATH = Path(os.environ.get("TRACTOR_TRACKER_DB", str(DATA_DIR / "tractor_tracker.db")))
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
@@ -107,15 +108,64 @@ def smtp_summary():
     smtp_from = os.environ.get("SMTP_FROM", "").strip() or SUPPORT_EMAIL
     smtp_port = os.environ.get("SMTP_PORT", "587").strip()
     use_tls = os.environ.get("SMTP_USE_TLS", "true").lower() != "false"
+    smtp_password = normalized_smtp_password()
+    password_value = os.environ.get("SMTP_PASSWORD", "")
+    password_multiline = "\n" in password_value or "SMTP_" in password_value
     return (
         "Password reset email "
         f"configured={'yes' if bool(smtp_host) else 'no'} "
         f"host={smtp_host or '(missing)'} "
         f"port={smtp_port or '(missing)'} "
         f"user_set={'yes' if bool(smtp_user) else 'no'} "
+        f"password_set={'yes' if bool(smtp_password) else 'no'} "
+        f"password_length={len(smtp_password)} "
+        f"password_value_problem={'yes' if password_multiline else 'no'} "
         f"from={smtp_from} "
         f"tls={'yes' if use_tls else 'no'}"
     )
+
+
+def smtp_status_payload():
+    smtp_host = os.environ.get("SMTP_HOST", "").strip()
+    smtp_user = os.environ.get("SMTP_USER", "").strip()
+    smtp_from = os.environ.get("SMTP_FROM", "").strip() or SUPPORT_EMAIL
+    smtp_port = os.environ.get("SMTP_PORT", "587").strip()
+    smtp_password = normalized_smtp_password()
+    password_value = os.environ.get("SMTP_PASSWORD", "")
+    return {
+        "configured": bool(smtp_host),
+        "host": smtp_host or None,
+        "port": smtp_port or None,
+        "userSet": bool(smtp_user),
+        "from": smtp_from,
+        "passwordSet": bool(smtp_password),
+        "passwordLength": len(smtp_password),
+        "passwordValueProblem": "\n" in password_value or "SMTP_" in password_value,
+        "tls": os.environ.get("SMTP_USE_TLS", "true").lower() != "false",
+        "publicUrlSet": bool(os.environ.get("TRACTOR_TRACKER_PUBLIC_URL", "").strip()),
+    }
+
+
+def static_status_payload():
+    files = [
+        "index.html",
+        "app.js",
+        "styles.css",
+        "manifest.webmanifest",
+        "sw.js",
+        "icons/icon-192.png",
+        "icons/icon-512.png",
+        "icons/apple-touch-icon.png",
+    ]
+    return {filename: (APP_DIR / filename).exists() for filename in files}
+
+
+def normalized_smtp_password():
+    password = os.environ.get("SMTP_PASSWORD", "").strip()
+    smtp_host = os.environ.get("SMTP_HOST", "").lower()
+    if "gmail.com" in smtp_host:
+        password = password.replace(" ", "")
+    return password
 
 
 class Database:
@@ -276,10 +326,20 @@ def empty_farm_data():
 
 
 class TractorTrackerHandler(SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=str(APP_DIR), **kwargs)
+
     def do_GET(self):
         request_path = self.path.split("?", 1)[0]
         if request_path == "/api/health":
-            self.send_json({"ok": True, "service": "Tractor Tracker", "time": iso_now()})
+            self.send_json({
+                "ok": True,
+                "service": "Tractor Tracker",
+                "time": iso_now(),
+                "database": "postgres" if USE_POSTGRES else "sqlite",
+                "smtp": smtp_status_payload(),
+                "staticFiles": static_status_payload(),
+            })
             return
         if request_path == "/api/farm":
             self.handle_get_farm()
@@ -360,12 +420,12 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
         return f"{scheme}://{host}".rstrip("/")
 
     def send_email(self, to_address, subject, text_body):
-        smtp_host = os.environ.get("SMTP_HOST")
-        smtp_from = os.environ.get("SMTP_FROM") or SUPPORT_EMAIL
+        smtp_host = os.environ.get("SMTP_HOST", "").strip()
+        smtp_from = os.environ.get("SMTP_FROM", "").strip() or SUPPORT_EMAIL
 
         if not smtp_host:
-            print(f"Email not sent because SMTP_HOST is not configured. To: {to_address} Subject: {subject}")
-            print(text_body)
+            print(f"Email not sent because SMTP_HOST is not configured. To: {to_address} Subject: {subject}", flush=True)
+            print(text_body, flush=True)
             return False
 
         message = EmailMessage()
@@ -374,9 +434,9 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
         message["Subject"] = subject
         message.set_content(text_body)
 
-        smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-        smtp_user = os.environ.get("SMTP_USER")
-        smtp_password = os.environ.get("SMTP_PASSWORD")
+        smtp_port = int(os.environ.get("SMTP_PORT", "587").strip())
+        smtp_user = os.environ.get("SMTP_USER", "").strip()
+        smtp_password = normalized_smtp_password()
         use_tls = os.environ.get("SMTP_USE_TLS", "true").lower() != "false"
 
         try:
@@ -387,7 +447,7 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
                     smtp.login(smtp_user, smtp_password)
                 smtp.send_message(message)
         except Exception as error:
-            print(f"Password reset email failed for {to_address}: {error}")
+            print(f"Password reset email failed for {to_address}: {error}", flush=True)
             return False
 
         return True
@@ -482,9 +542,11 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
             return
 
         email_sent = False
+        user_found = False
         with connect_db() as db:
             user = db.execute("SELECT id, email FROM users WHERE email = ?", (email,)).fetchone()
             if user:
+                user_found = True
                 db.execute("DELETE FROM password_resets WHERE user_id = ? AND (used_at IS NOT NULL OR expires_at <= ?)", (user["id"], iso_now()))
                 token = secrets.token_urlsafe(32)
                 expires_at = (utc_now() + timedelta(minutes=RESET_TOKEN_MINUTES)).isoformat()
@@ -504,6 +566,11 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
                         f"If you did not ask for this, you can ignore this email or contact {SUPPORT_EMAIL}.",
                     ]),
                 )
+
+        if not user_found:
+            print(f"Password reset requested for unknown account: {email}", flush=True)
+            self.send_json({"message": generic_message, "emailConfigured": bool(os.environ.get("SMTP_HOST"))})
+            return
 
         if email_sent:
             self.send_json({"message": generic_message, "emailConfigured": True})
