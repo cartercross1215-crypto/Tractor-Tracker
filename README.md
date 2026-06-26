@@ -39,7 +39,7 @@ Tractor Tracker is a browser-based MVP for farmers and independent contractors w
 - Account and sync foundation with a local secure database server
 - Startup cloud account prompt for existing account login, new account creation, or local-only use
 - Login automatically downloads the account's cloud records onto the device
-- Forgot password and reset-link foundation with expiring tokens and SMTP email hooks
+- Forgot password and reset-link foundation with expiring tokens and SMTP email support
 - Logged-in password change with confirmation and session logout
 - Privacy Policy, Terms of Service, and data deletion instructions inside the Account section
 - Account controls for data download, cloud-data deletion, account deletion, and logging out all devices
@@ -78,7 +78,7 @@ See `DEPLOYMENT.md` for the hosting checklist.
 
 ## Current limitations
 
-This is still a prototype. It now includes an account/sync server, automatic sync logic, hosted cloud account flow, hosting-ready server settings, Supabase/Postgres database support, Free Unlimited Beta plan access, password reset hooks, clearer sync controls, contractor invoice records, and optional GPS distance tracking, but real payment processing, production email provider configuration, photos, and documents are not added yet. Data is saved in the browser immediately and syncs later when the sync server is available.
+This is still a prototype. It now includes an account/sync server, automatic sync logic, hosted cloud account flow, hosting-ready server settings, Supabase/Postgres database support, Free Unlimited Beta plan access, password reset hooks with SMTP support, clearer sync controls, contractor invoice records, and optional GPS distance tracking, but real payment processing, photos, and documents are not added yet. Data is saved in the browser immediately and syncs later when the sync server is available.
 
 ## Paid plan direction
 

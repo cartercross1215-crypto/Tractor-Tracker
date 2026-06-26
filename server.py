@@ -101,6 +101,23 @@ def database_url_summary():
         return f"DATABASE_URL format problem: {error}"
 
 
+def smtp_summary():
+    smtp_host = os.environ.get("SMTP_HOST", "").strip()
+    smtp_user = os.environ.get("SMTP_USER", "").strip()
+    smtp_from = os.environ.get("SMTP_FROM", "").strip() or SUPPORT_EMAIL
+    smtp_port = os.environ.get("SMTP_PORT", "587").strip()
+    use_tls = os.environ.get("SMTP_USE_TLS", "true").lower() != "false"
+    return (
+        "Password reset email "
+        f"configured={'yes' if bool(smtp_host) else 'no'} "
+        f"host={smtp_host or '(missing)'} "
+        f"port={smtp_port or '(missing)'} "
+        f"user_set={'yes' if bool(smtp_user) else 'no'} "
+        f"from={smtp_from} "
+        f"tls={'yes' if use_tls else 'no'}"
+    )
+
+
 class Database:
     def __init__(self):
         self.connection = None
@@ -631,6 +648,7 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
 
 def main():
     print(database_url_summary())
+    print(smtp_summary())
     init_db()
     port = int(os.environ.get("PORT") or os.environ.get("TRACTOR_TRACKER_PORT") or "8000")
     host = os.environ.get("HOST") or ("0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")

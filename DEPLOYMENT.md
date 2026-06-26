@@ -46,6 +46,7 @@ The included `render.yaml` sets:
 - `/data` persistent disk
 - `TRACTOR_TRACKER_DATA_DIR=/data`
 - `DATABASE_URL` secret placeholder for Supabase/Postgres
+- SMTP placeholders for password-reset email
 
 ## Database
 
@@ -84,4 +85,17 @@ Password reset links are built into the server. To actually send reset emails, a
 - `SMTP_FROM`
 - `SMTP_USE_TLS`
 
+For a temporary Gmail setup, use an app password, not your normal Gmail password:
+
+- `SMTP_HOST=smtp.gmail.com`
+- `SMTP_PORT=587`
+- `SMTP_USER=your Gmail address`
+- `SMTP_PASSWORD=your Google app password`
+- `SMTP_FROM=your Gmail address`
+- `SMTP_USE_TLS=true`
+
+For a more professional production setup, use a transactional email provider such as Postmark, SendGrid, Mailgun, or Amazon SES and enter that provider's SMTP settings instead.
+
 If SMTP is not configured, users will be told to contact the support email instead of receiving a reset email.
+
+After changing SMTP variables in Render, redeploy the service and check the logs for `Password reset email configured=yes`.
