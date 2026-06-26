@@ -30,7 +30,7 @@ INTEGRITY_ERRORS = (sqlite3.IntegrityError,) + ((psycopg.IntegrityError,) if psy
 PBKDF2_ITERATIONS = 210_000
 SESSION_DAYS = 30
 RESET_TOKEN_MINUTES = 45
-SUPPORT_EMAIL = os.environ.get("TRACTOR_TRACKER_SUPPORT_EMAIL", "carterc.issa@gmail.com")
+SUPPORT_EMAIL = os.environ.get("TRACTOR_TRACKER_SUPPORT_EMAIL", "tractortracker.support@gmail.com")
 
 
 def utc_now():

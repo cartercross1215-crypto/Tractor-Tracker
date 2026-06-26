@@ -46,7 +46,7 @@ Tractor Tracker is a browser-based MVP for farmers and independent contractors w
 - Clearer sync controls with last-saved time, last-synced time, retry sync, offline/unsynced warnings, and conflict choices
 - Contractor invoices with customer/job-site work, hours, equipment, distance, loads, materials, rates, tax, paid/unpaid status, and printable invoice output
 - Send Feedback form for beta bugs, sync issues, confusing screens, and feature requests
-- Temporary support and app-update contact email: carterc.issa@gmail.com
+- Support and app-update contact email: tractortracker.support@gmail.com
 - Sample data button for quick testing
 - Local browser storage
 

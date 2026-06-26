@@ -12,7 +12,7 @@ services:
       - key: TRACTOR_TRACKER_PUBLIC_URL
         value: https://tractor-tracker-yboz.onrender.com
       - key: TRACTOR_TRACKER_SUPPORT_EMAIL
-        value: carterc.issa@gmail.com
+        value: tractortracker.support@gmail.com
       - key: DATABASE_URL
         sync: false
       - key: SMTP_HOST
