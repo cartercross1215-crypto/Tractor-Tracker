@@ -379,12 +379,16 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
         smtp_password = os.environ.get("SMTP_PASSWORD")
         use_tls = os.environ.get("SMTP_USE_TLS", "true").lower() != "false"
 
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
-            if use_tls:
-                smtp.starttls()
-            if smtp_user and smtp_password:
-                smtp.login(smtp_user, smtp_password)
-            smtp.send_message(message)
+        try:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
+                if use_tls:
+                    smtp.starttls()
+                if smtp_user and smtp_password:
+                    smtp.login(smtp_user, smtp_password)
+                smtp.send_message(message)
+        except Exception as error:
+            print(f"Password reset email failed for {to_address}: {error}")
+            return False
 
         return True
 
@@ -503,6 +507,11 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
 
         if email_sent:
             self.send_json({"message": generic_message, "emailConfigured": True})
+        elif os.environ.get("SMTP_HOST"):
+            self.send_json({
+                "message": f"Password reset email could not be sent. Contact {SUPPORT_EMAIL} for help.",
+                "emailConfigured": False,
+            })
         else:
             self.send_json({
                 "message": f"Password reset email is not configured yet. Contact {SUPPORT_EMAIL} for help.",

@@ -1156,6 +1156,7 @@ async function requestPasswordReset(email, showMessage) {
     return;
   }
 
+  showMessage("Sending password reset link...", "success");
   const payload = await cloudRequest("/api/password/forgot", {
     method: "POST",
     body: JSON.stringify({ email: accountEmail })
@@ -3245,10 +3246,18 @@ elements.startupLoginForm.addEventListener("submit", async (event) => {
 
 elements.startupForgotPassword.addEventListener("click", async () => {
   showStartupCloudMessage("");
+  if (!elements.startupLoginEmail.value.trim()) {
+    elements.startupLoginEmail.focus();
+  }
+  elements.startupForgotPassword.disabled = true;
+  elements.startupForgotPassword.textContent = "Sending...";
   try {
     await requestPasswordReset(elements.startupLoginEmail.value, showStartupCloudMessage);
   } catch (error) {
     showStartupCloudMessage(error.message, "error");
+  } finally {
+    elements.startupForgotPassword.disabled = false;
+    elements.startupForgotPassword.textContent = "Forgot Password";
   }
 });
 
@@ -3823,10 +3832,19 @@ elements.loginForm.addEventListener("submit", async (event) => {
 
 elements.forgotPassword.addEventListener("click", async () => {
   showCloudMessage("");
+  const loginEmail = document.querySelector("#login-email");
+  if (!loginEmail.value.trim()) {
+    loginEmail.focus();
+  }
+  elements.forgotPassword.disabled = true;
+  elements.forgotPassword.textContent = "Sending...";
   try {
-    await requestPasswordReset(document.querySelector("#login-email").value, showCloudMessage);
+    await requestPasswordReset(loginEmail.value, showCloudMessage);
   } catch (error) {
     showCloudMessage(error.message, "error");
+  } finally {
+    elements.forgotPassword.disabled = false;
+    elements.forgotPassword.textContent = "Forgot Password";
   }
 });
 
@@ -4249,7 +4267,7 @@ setInterval(updateJobTimer, 1000);
 
 if (window.navigator && "serviceWorker" in window.navigator) {
   window.addEventListener("load", () => {
-    window.navigator.serviceWorker.register("sw.js?v=30").catch((error) => {
+    window.navigator.serviceWorker.register("sw.js?v=31").catch((error) => {
       console.warn("Service worker registration failed:", error);
     });
   });
