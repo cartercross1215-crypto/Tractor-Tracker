@@ -74,10 +74,22 @@ Open the hosted HTTPS address in a browser. The same address serves the app and 
 
 ## Password Reset Email
 
-Password reset links are built into the server. To actually send reset emails, add SMTP settings in the host environment:
+Password reset links are built into the server. Resend API email is preferred on Render because it uses normal HTTPS instead of SMTP ports.
 
 - `TRACTOR_TRACKER_PUBLIC_URL`
 - `TRACTOR_TRACKER_SUPPORT_EMAIL`
+- `RESEND_API_KEY`
+- `RESEND_FROM`
+
+Example Resend settings:
+
+- `RESEND_API_KEY=your Resend API key`
+- `RESEND_FROM=Tractor Tracker <your verified sender address>`
+
+If you do not have a verified production domain yet, use the sender address Resend allows for testing. Password reset emails still go to the Tractor Tracker account email entered by the user.
+
+SMTP is still supported as a fallback:
+
 - `SMTP_HOST`
 - `SMTP_PORT`
 - `SMTP_USER`
@@ -96,8 +108,8 @@ For a temporary Gmail setup, use an app password, not your normal Gmail password
 
 In Render, each SMTP line must be its own environment variable. The `SMTP_PASSWORD` value should be only the Google app password itself, not the whole list of SMTP settings. If Google shows the app password in groups with spaces, the server will remove the spaces for Gmail, but the cleaned password length in the Render logs should still be `16`.
 
-For a more professional production setup, use a transactional email provider such as Postmark, SendGrid, Mailgun, or Amazon SES and enter that provider's SMTP settings instead.
+For a more professional production setup, verify a Tractor Tracker domain in Resend or use another transactional email provider such as Postmark, SendGrid, Mailgun, or Amazon SES.
 
-If SMTP is not configured, users will be told to contact the support email instead of receiving a reset email.
+If no email provider is configured, users will be told to contact the support email instead of receiving a reset email.
 
-After changing SMTP variables in Render, redeploy the service and check the logs for `Password reset email configured=yes`, `password_set=yes`, `password_length=16`, and `password_value_problem=no`.
+After changing email variables in Render, redeploy the service and open `/api/health`. Check that `email.preferredProvider` is `resend`, `resend.configured` is `true`, and `email.publicUrlSet` is `true`.

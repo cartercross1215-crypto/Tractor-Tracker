@@ -11,6 +11,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+RUN test -f icons/icon-192.png && test -f icons/icon-512.png && test -f icons/apple-touch-icon.png
+
 RUN mkdir -p /data
 
 EXPOSE 10000

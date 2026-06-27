@@ -7,6 +7,8 @@ import os
 import secrets
 import smtplib
 import sqlite3
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from http import HTTPStatus
@@ -146,6 +148,41 @@ def smtp_status_payload():
     }
 
 
+def resend_status_payload():
+    resend_api_key = os.environ.get("RESEND_API_KEY", "").strip()
+    resend_from = os.environ.get("RESEND_FROM", "").strip()
+    return {
+        "configured": bool(resend_api_key and resend_from),
+        "apiKeySet": bool(resend_api_key),
+        "fromSet": bool(resend_from),
+        "from": resend_from or None,
+        "publicUrlSet": bool(os.environ.get("TRACTOR_TRACKER_PUBLIC_URL", "").strip()),
+    }
+
+
+def resend_summary():
+    status = resend_status_payload()
+    return (
+        "Password reset Resend "
+        f"configured={'yes' if status['configured'] else 'no'} "
+        f"api_key_set={'yes' if status['apiKeySet'] else 'no'} "
+        f"from_set={'yes' if status['fromSet'] else 'no'} "
+        f"from={status['from'] or '(missing)'}"
+    )
+
+
+def email_delivery_configured():
+    return bool(resend_status_payload()["configured"] or os.environ.get("SMTP_HOST", "").strip())
+
+
+def preferred_email_provider():
+    if resend_status_payload()["configured"]:
+        return "resend"
+    if os.environ.get("SMTP_HOST", "").strip():
+        return "smtp"
+    return None
+
+
 def static_status_payload():
     files = [
         "index.html",
@@ -158,6 +195,14 @@ def static_status_payload():
         "icons/apple-touch-icon.png",
     ]
     return {filename: (APP_DIR / filename).exists() for filename in files}
+
+
+def static_status_summary():
+    status = static_status_payload()
+    missing = [filename for filename, exists in status.items() if not exists]
+    if not missing:
+        return f"Static files ok in {APP_DIR}"
+    return f"Static files missing in {APP_DIR}: {', '.join(missing)}"
 
 
 def normalized_smtp_password():
@@ -337,6 +382,12 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
                 "service": "Tractor Tracker",
                 "time": iso_now(),
                 "database": "postgres" if USE_POSTGRES else "sqlite",
+                "email": {
+                    "configured": email_delivery_configured(),
+                    "preferredProvider": preferred_email_provider(),
+                    "publicUrlSet": bool(os.environ.get("TRACTOR_TRACKER_PUBLIC_URL", "").strip()),
+                },
+                "resend": resend_status_payload(),
                 "smtp": smtp_status_payload(),
                 "staticFiles": static_status_payload(),
             })
@@ -419,13 +470,48 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
         host = self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or "127.0.0.1:8000"
         return f"{scheme}://{host}".rstrip("/")
 
-    def send_email(self, to_address, subject, text_body):
+    def send_resend_email(self, to_address, subject, text_body):
+        resend_api_key = os.environ.get("RESEND_API_KEY", "").strip()
+        resend_from = os.environ.get("RESEND_FROM", "").strip()
+
+        if not resend_api_key or not resend_from:
+            return False
+
+        payload = json.dumps({
+            "from": resend_from,
+            "to": [to_address],
+            "subject": subject,
+            "text": text_body,
+        }).encode("utf-8")
+        request = urllib.request.Request(
+            "https://api.resend.com/emails",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {resend_api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                if 200 <= response.status < 300:
+                    return True
+                detail = response.read().decode("utf-8", errors="replace")
+                print(f"Resend email failed for {to_address}: HTTP {response.status} {detail}", flush=True)
+        except urllib.error.HTTPError as error:
+            detail = error.read().decode("utf-8", errors="replace")
+            print(f"Resend email failed for {to_address}: HTTP {error.code} {detail}", flush=True)
+        except Exception as error:
+            print(f"Resend email failed for {to_address}: {error}", flush=True)
+
+        return False
+
+    def send_smtp_email(self, to_address, subject, text_body):
         smtp_host = os.environ.get("SMTP_HOST", "").strip()
         smtp_from = os.environ.get("SMTP_FROM", "").strip() or SUPPORT_EMAIL
 
         if not smtp_host:
-            print(f"Email not sent because SMTP_HOST is not configured. To: {to_address} Subject: {subject}", flush=True)
-            print(text_body, flush=True)
             return False
 
         message = EmailMessage()
@@ -447,10 +533,23 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
                     smtp.login(smtp_user, smtp_password)
                 smtp.send_message(message)
         except Exception as error:
-            print(f"Password reset email failed for {to_address}: {error}", flush=True)
+            print(f"SMTP password reset email failed for {to_address}: {error}", flush=True)
             return False
 
         return True
+
+    def send_email(self, to_address, subject, text_body):
+        if self.send_resend_email(to_address, subject, text_body):
+            return True
+
+        if self.send_smtp_email(to_address, subject, text_body):
+            return True
+
+        if not email_delivery_configured():
+            print(f"Email not sent because no email provider is configured. To: {to_address} Subject: {subject}", flush=True)
+            print(text_body, flush=True)
+
+        return False
 
     def farm_payload(self, db, user_id, email, token=None, expires_at=None):
         farm = db.execute("SELECT id, name, data_json, updated_at FROM farms WHERE user_id = ?", (user_id,)).fetchone()
@@ -569,12 +668,12 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
 
         if not user_found:
             print(f"Password reset requested for unknown account: {email}", flush=True)
-            self.send_json({"message": generic_message, "emailConfigured": bool(os.environ.get("SMTP_HOST"))})
+            self.send_json({"message": generic_message, "emailConfigured": email_delivery_configured()})
             return
 
         if email_sent:
             self.send_json({"message": generic_message, "emailConfigured": True})
-        elif os.environ.get("SMTP_HOST"):
+        elif email_delivery_configured():
             self.send_json({
                 "message": f"Password reset email could not be sent. Contact {SUPPORT_EMAIL} for help.",
                 "emailConfigured": False,
@@ -724,7 +823,9 @@ class TractorTrackerHandler(SimpleHTTPRequestHandler):
 
 def main():
     print(database_url_summary())
+    print(resend_summary())
     print(smtp_summary())
+    print(static_status_summary(), flush=True)
     init_db()
     port = int(os.environ.get("PORT") or os.environ.get("TRACTOR_TRACKER_PORT") or "8000")
     host = os.environ.get("HOST") or ("0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")

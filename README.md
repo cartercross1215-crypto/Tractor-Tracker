@@ -39,7 +39,7 @@ Tractor Tracker is a browser-based MVP for farmers and independent contractors w
 - Account and sync foundation with a local secure database server
 - Startup cloud account prompt for existing account login, new account creation, or local-only use
 - Login automatically downloads the account's cloud records onto the device
-- Forgot password and reset-link foundation with expiring tokens and SMTP email support
+- Forgot password and reset-link foundation with expiring tokens, Resend API email support, and SMTP fallback
 - Logged-in password change with confirmation and session logout
 - Privacy Policy, Terms of Service, and data deletion instructions inside the Account section
 - Account controls for data download, cloud-data deletion, account deletion, and logging out all devices

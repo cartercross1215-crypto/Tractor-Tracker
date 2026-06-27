@@ -15,6 +15,10 @@ services:
         value: tractortracker.support@gmail.com
       - key: DATABASE_URL
         sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
