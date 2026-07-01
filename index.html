@@ -9,14 +9,14 @@
   <meta name="apple-mobile-web-app-title" content="Tractor Tracker" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Tractor Tracker</title>
-  <link rel="manifest" href="manifest.webmanifest?v=32" />
+  <link rel="manifest" href="manifest.webmanifest?v=33" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png" />
   <link rel="apple-touch-icon" sizes="167x167" href="icons/apple-touch-icon-167.png" />
   <link rel="apple-touch-icon" sizes="152x152" href="icons/apple-touch-icon-152.png" />
-  <link rel="stylesheet" href="styles.css?v=32" />
+  <link rel="stylesheet" href="styles.css?v=33" />
 </head>
 <body>
   <div id="app-preloader" class="app-preloader" role="status" aria-live="polite">
@@ -559,6 +559,24 @@
           </div>
         </section>
 
+        <section id="support-admin-section" class="panel" hidden>
+          <h2>Support Tools</h2>
+          <p>Use these only when a customer asks for account help. Download their data before replacing anything.</p>
+          <form id="support-search-form" class="form-grid compact-form">
+            <label>Account email<input id="support-search-email" type="email" placeholder="customer@example.com" required /></label>
+            <div class="form-actions full-width">
+              <button type="submit">Find Account</button>
+              <button id="support-download-account" type="button" class="secondary-button" disabled>Download Account Data</button>
+            </div>
+          </form>
+          <div id="support-account-summary" class="saved-item empty-state">No support account selected.</div>
+          <div class="form-actions compact-form">
+            <button id="support-replace-account" type="button" class="danger-button" disabled>Replace Cloud Data</button>
+          </div>
+          <input id="support-replace-file" class="visually-hidden" type="file" accept="application/json,.json" />
+          <p id="support-admin-message" class="message" aria-live="polite"></p>
+        </section>
+
         <section class="panel">
           <h2>Send Feedback</h2>
           <form id="feedback-form" class="form-grid compact-form">
@@ -605,6 +623,7 @@
             <h3>Privacy Policy</h3>
             <p>Tractor Tracker stores account email addresses, farm or business names, equipment records, operators, fields or job sites, jobs, maintenance reminders, completed maintenance history, customers, settings, and sync status.</p>
             <p>Basic Local records are saved locally in this browser immediately. When you log in, the same records can also be saved online to your Tractor Tracker cloud account for syncing across devices.</p>
+            <p>Support administrators can review and replace cloud account data only to help with account problems, requested corrections, or recovery. Support actions are recorded by the server.</p>
             <p>Support contact: <a href="mailto:tractortracker.support@gmail.com?subject=Tractor%20Tracker%20privacy">tractortracker.support@gmail.com</a>.</p>
           </article>
           <article id="terms-service">
@@ -622,6 +641,6 @@
     </section>
   </main>
 
-  <script src="app.js?v=32"></script>
+  <script src="app.js?v=33"></script>
 </body>
 </html>

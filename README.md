@@ -43,6 +43,7 @@ Tractor Tracker is a browser-based MVP for farmers and independent contractors w
 - Logged-in password change with confirmation and session logout
 - Privacy Policy, Terms of Service, and data deletion instructions inside the Account section
 - Account controls for data download, cloud-data deletion, account deletion, and logging out all devices
+- Support-admin tools for the configured support email to review, download, and replace cloud account data when helping users
 - Clearer sync controls with last-saved time, last-synced time, retry sync, offline/unsynced warnings, and conflict choices
 - Contractor invoices with customer/job-site work, hours, equipment, distance, loads, materials, rates, tax, paid/unpaid status, and printable invoice output
 - Send Feedback form for beta bugs, sync issues, confusing screens, and feature requests

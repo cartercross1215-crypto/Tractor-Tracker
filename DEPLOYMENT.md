@@ -78,6 +78,7 @@ Password reset links are built into the server. Resend API email is preferred on
 
 - `TRACTOR_TRACKER_PUBLIC_URL`
 - `TRACTOR_TRACKER_SUPPORT_EMAIL`
+- `ADMIN_EMAILS`
 - `RESEND_API_KEY`
 - `RESEND_FROM`
 
@@ -85,6 +86,12 @@ Example Resend settings:
 
 - `RESEND_API_KEY=your Resend API key`
 - `RESEND_FROM=Tractor Tracker <your verified sender address>`
+
+Example support-admin setting:
+
+- `ADMIN_EMAILS=tractortracker.support@gmail.com`
+
+Accounts listed in `ADMIN_EMAILS` can use the Support Tools panel after logging in. They can review, download, and replace customer cloud data for support purposes, and those actions are recorded in the server audit table.
 
 If you do not have a verified production domain yet, use the sender address Resend allows for testing. Password reset emails still go to the Tractor Tracker account email entered by the user.
 

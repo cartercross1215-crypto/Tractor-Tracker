@@ -150,7 +150,8 @@ const state = {
   editingOperatorId: null,
   editingImplementId: null,
   editingJobId: null,
-  editingMaintenanceId: null
+  editingMaintenanceId: null,
+  supportSelectedAccount: null
 };
 
 let autoSyncTimer = null;
@@ -180,6 +181,14 @@ const elements = {
   startupRegisterForm: document.querySelector("#startup-register-form"),
   resetPasswordForm: document.querySelector("#reset-password-form"),
   changePasswordForm: document.querySelector("#change-password-form"),
+  supportAdminSection: document.querySelector("#support-admin-section"),
+  supportSearchForm: document.querySelector("#support-search-form"),
+  supportSearchEmail: document.querySelector("#support-search-email"),
+  supportAccountSummary: document.querySelector("#support-account-summary"),
+  supportDownloadAccount: document.querySelector("#support-download-account"),
+  supportReplaceAccount: document.querySelector("#support-replace-account"),
+  supportReplaceFile: document.querySelector("#support-replace-file"),
+  supportAdminMessage: document.querySelector("#support-admin-message"),
   equipmentDisplay: document.querySelector("#equipment-display"),
   fieldList: document.querySelector("#field-list"),
   customerList: document.querySelector("#customer-list"),
@@ -1281,6 +1290,59 @@ async function downloadAllAccountData() {
   downloadFile(`tractor-tracker-account-data-${backupDate}.json`, JSON.stringify(backup, null, 2), "application/json");
 }
 
+function showSupportAdminMessage(text, type = "") {
+  elements.supportAdminMessage.textContent = text;
+  elements.supportAdminMessage.className = `message ${type}`;
+}
+
+function renderSupportAdmin() {
+  const isAdmin = Boolean(state.cloudSession?.isAdmin);
+  elements.supportAdminSection.hidden = !isAdmin;
+
+  if (!isAdmin) {
+    state.supportSelectedAccount = null;
+    return;
+  }
+
+  const account = state.supportSelectedAccount;
+  elements.supportDownloadAccount.disabled = !account;
+  elements.supportReplaceAccount.disabled = !account;
+
+  if (!account) {
+    elements.supportAccountSummary.className = "saved-item empty-state";
+    elements.supportAccountSummary.textContent = "No support account selected.";
+    return;
+  }
+
+  elements.supportAccountSummary.className = "saved-item";
+  elements.supportAccountSummary.innerHTML = `
+    <p><strong>Account:</strong> ${escapeHtml(account.email)}</p>
+    <p><strong>Farm/business:</strong> ${escapeHtml(account.farm?.name || "Unnamed")}</p>
+    <p><strong>Last cloud update:</strong> ${formatSyncTime(account.farm?.updatedAt)}</p>
+    <p><strong>Equipment:</strong> ${account.farm?.data?.equipment?.length || 0} / <strong>Jobs:</strong> ${account.farm?.data?.jobs?.length || 0} / <strong>Maintenance:</strong> ${account.farm?.data?.maintenance?.length || 0}</p>
+  `;
+}
+
+function downloadSupportAccountData() {
+  const account = state.supportSelectedAccount;
+  if (!account) {
+    showSupportAdminMessage("Find an account first.", "error");
+    return;
+  }
+
+  const backup = {
+    app: "Tractor Tracker",
+    exportType: "support-account-data",
+    version: 11,
+    exportedAt: new Date().toISOString(),
+    accountEmail: account.email,
+    cloudUpdatedAt: account.farm?.updatedAt || null,
+    data: account.farm?.data || {}
+  };
+  const backupDate = new Date().toISOString().slice(0, 10);
+  downloadFile(`tractor-tracker-support-${account.email}-${backupDate}.json`, JSON.stringify(backup, null, 2), "application/json");
+}
+
 function renderCloudAccount() {
   const session = state.cloudSession;
   const isConnected = Boolean(session?.token);
@@ -1304,6 +1366,7 @@ function renderCloudAccount() {
   elements.registerForm.hidden = isConnected;
   elements.loginForm.hidden = isConnected;
   elements.changePasswordForm.hidden = !isConnected;
+  renderSupportAdmin();
 
   if (!registerFarm.value) {
     registerFarm.value = state.settings.businessName || "Home Farm";
@@ -1476,6 +1539,7 @@ function sessionFromPayload(payload, existingToken = null) {
   return {
     token: payload.token || existingToken || state.cloudSession?.token,
     email: payload.email,
+    isAdmin: Boolean(payload.isAdmin),
     farmId: payload.farm?.id,
     farmName: payload.farm?.name,
     lastSync: payload.farm?.updatedAt || new Date().toISOString(),
@@ -4054,6 +4118,93 @@ elements.downloadAccountData.addEventListener("click", async () => {
   }
 });
 
+elements.supportSearchForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  showSupportAdminMessage("Looking up account...", "success");
+  state.supportSelectedAccount = null;
+  renderSupportAdmin();
+
+  try {
+    const payload = await cloudRequest("/api/admin/account", {
+      method: "POST",
+      body: JSON.stringify({ email: elements.supportSearchEmail.value.trim() })
+    });
+    state.supportSelectedAccount = payload;
+    renderSupportAdmin();
+    showSupportAdminMessage("Support account loaded. Download a backup before replacing anything.", "success");
+  } catch (error) {
+    showSupportAdminMessage(error.message, "error");
+  }
+});
+
+elements.supportDownloadAccount.addEventListener("click", () => {
+  downloadSupportAccountData();
+  showSupportAdminMessage("Support backup downloaded.", "success");
+});
+
+elements.supportReplaceAccount.addEventListener("click", () => {
+  if (!state.supportSelectedAccount) {
+    showSupportAdminMessage("Find an account first.", "error");
+    return;
+  }
+
+  if (!window.confirm(`Replace cloud data for ${state.supportSelectedAccount.email}? Download a backup first.`)) {
+    return;
+  }
+
+  elements.supportReplaceFile.click();
+});
+
+elements.supportReplaceFile.addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  if (!file || !state.supportSelectedAccount) {
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.addEventListener("load", async () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      const replacementData = normalizeRestoredBackup(parsed.data || parsed);
+      const targetEmail = state.supportSelectedAccount.email;
+      const confirmEmail = window.prompt(`Type ${targetEmail} to confirm replacing this account's cloud data.`);
+      if (confirmEmail !== targetEmail) {
+        showSupportAdminMessage("Support replacement canceled.", "error");
+        return;
+      }
+      const password = promptForAccountPassword("replace this customer's cloud data");
+      if (password === null) {
+        showSupportAdminMessage("Support replacement canceled.", "error");
+        return;
+      }
+      const payload = await cloudRequest("/api/admin/account/save", {
+        method: "POST",
+        body: JSON.stringify({
+          email: targetEmail,
+          confirmEmail,
+          password,
+          farmName: replacementData.settings?.businessName || state.supportSelectedAccount.farm?.name || "Home Farm",
+          data: replacementData
+        })
+      });
+      state.supportSelectedAccount = payload;
+      renderSupportAdmin();
+      showSupportAdminMessage("Customer cloud data replaced.", "success");
+    } catch (error) {
+      showSupportAdminMessage(error.message || "Could not replace that account.", "error");
+    } finally {
+      event.target.value = "";
+    }
+  });
+
+  reader.addEventListener("error", () => {
+    showSupportAdminMessage("Could not read that support backup file.", "error");
+    event.target.value = "";
+  });
+
+  reader.readAsText(file);
+});
+
 elements.invoiceForm.addEventListener("submit", (event) => {
   event.preventDefault();
   showInvoiceMessage("");
@@ -4342,7 +4493,7 @@ checkServerConnection();
 
 if (window.navigator && "serviceWorker" in window.navigator) {
   window.addEventListener("load", () => {
-    window.navigator.serviceWorker.register("sw.js?v=32").catch((error) => {
+    window.navigator.serviceWorker.register("sw.js?v=33").catch((error) => {
       console.warn("Service worker registration failed:", error);
     });
   });
