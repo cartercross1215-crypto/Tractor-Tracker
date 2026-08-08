@@ -135,6 +135,7 @@ def fuel_price_do_get(self):
             '  <script src="fuel-location-prices.js?v=2"></script>',
             '  <script src="mode-branding.js?v=1"></script>',
             '  <script src="estimate-builder.js?v=1"></script>',
+            '  <script src="estimate-mode-guard.js?v=1"></script>',
             '  <script src="quick-log.js?v=1"></script>',
             '  <script src="season-planner.js?v=1"></script>',
         ])
@@ -149,6 +150,8 @@ def fuel_price_do_get(self):
                 content = content.replace('  <script src="fuel-location-prices.js?v=1"></script>', '  <script src="fuel-location-prices.js?v=1"></script>\n  <script src="mode-branding.js?v=1"></script>')
             if "estimate-builder.js" not in content:
                 content = content.replace('  <script src="mode-branding.js?v=1"></script>', '  <script src="mode-branding.js?v=1"></script>\n  <script src="estimate-builder.js?v=1"></script>')
+            if "estimate-mode-guard.js" not in content:
+                content = content.replace('  <script src="estimate-builder.js?v=1"></script>', '  <script src="estimate-builder.js?v=1"></script>\n  <script src="estimate-mode-guard.js?v=1"></script>')
             if "quick-log.js" not in content:
                 content = content.replace('  <script src="estimate-builder.js?v=1"></script>', '  <script src="estimate-builder.js?v=1"></script>\n  <script src="quick-log.js?v=1"></script>')
             if "season-planner.js" not in content:
