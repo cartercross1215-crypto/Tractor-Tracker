@@ -14,7 +14,7 @@
   const FUEL_TYPE_OPTIONS = [
     { value: "Diesel", label: "Diesel" },
     { value: "Gasoline", label: "Gas" },
-    { value: "Off-road diesel", label: "Off-road diesel" },
+    { value: "Red diesel", label: "Red diesel" },
     { value: "DEF", label: "DEF" },
     { value: "Other", label: "Other" }
   ];
@@ -24,8 +24,21 @@
     if (["gas", "gasoline", "regular", "regular gas", "unleaded"].includes(normalized)) {
       return "Gasoline";
     }
-    if (["offroad", "off-road", "off road", "off-road diesel", "off road diesel"].includes(normalized)) {
-      return "Off-road diesel";
+    // "Off-road diesel" was the original label. Keep the old spellings as aliases so
+    // records saved before the rename still match and keep their price.
+    if ([
+      "red diesel",
+      "red",
+      "dyed diesel",
+      "dyed",
+      "farm diesel",
+      "offroad",
+      "off-road",
+      "off road",
+      "off-road diesel",
+      "off road diesel"
+    ].includes(normalized)) {
+      return "Red diesel";
     }
     if (normalized === "def") {
       return "DEF";
@@ -155,13 +168,111 @@
     }
   }
 
+  // Nearby fuel stations come from OpenStreetMap via Overpass: free, no API key, no
+  // billing account. OSM carries station name/brand/address but NOT pump prices, so the
+  // farmer still confirms the price -- this just tells them which stop they are standing at
+  // instead of guessing a town name. Two mirrors because the main one throttles.
+  const OVERPASS_ENDPOINTS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter"
+  ];
+  const STATION_SEARCH_RADIUS_METERS = 8000;
+  const STATION_RESULT_LIMIT = 8;
+
+  function stationDisplayName(tags = {}) {
+    return tags.name || tags.brand || tags.operator || "Unnamed fuel stop";
+  }
+
+  function stationAddress(tags = {}) {
+    const street = [tags["addr:housenumber"], tags["addr:street"]].filter(Boolean).join(" ");
+    const town = [tags["addr:city"], tags["addr:state"]].filter(Boolean).join(", ");
+    return [street, town].filter(Boolean).join(", ");
+  }
+
+  async function fetchNearbyFuelStations(latitude, longitude) {
+    const query = `[out:json][timeout:20];nwr["amenity"="fuel"](around:${STATION_SEARCH_RADIUS_METERS},${latitude},${longitude});out center tags ${STATION_RESULT_LIMIT * 4};`;
+    const origin = { latitude, longitude };
+
+    for (const endpoint of OVERPASS_ENDPOINTS) {
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ data: query }).toString(),
+          cache: "no-store"
+        });
+        if (!response.ok) {
+          continue;
+        }
+        const payload = await response.json();
+        const stations = (payload.elements || [])
+          .map((element) => {
+            const stationLat = element.lat ?? element.center?.lat;
+            const stationLon = element.lon ?? element.center?.lon;
+            if (!Number.isFinite(stationLat) || !Number.isFinite(stationLon)) {
+              return null;
+            }
+            const tags = element.tags || {};
+            return {
+              name: stationDisplayName(tags),
+              brand: tags.brand || "",
+              address: stationAddress(tags),
+              hasDiesel: tags["fuel:diesel"] === "yes",
+              latitude: stationLat,
+              longitude: stationLon,
+              distanceMiles: distanceMilesBetween(origin, { latitude: stationLat, longitude: stationLon })
+            };
+          })
+          .filter(Boolean)
+          .sort((a, b) => a.distanceMiles - b.distanceMiles)
+          .slice(0, STATION_RESULT_LIMIT);
+        if (stations.length) {
+          return stations;
+        }
+      } catch (error) {
+        // Offline, throttled, or blocked -- fall through to the next mirror, then to
+        // city/state naming. Station lookup is a convenience, never a hard requirement.
+      }
+    }
+    return [];
+  }
+
+  function locationHeadline(location) {
+    if (location?.station) {
+      const address = location.station.address ? ` (${location.station.address})` : "";
+      return `At ${location.station.name}${address}, ${number(location.station.distanceMiles, 1)} mi away.`;
+    }
+    return `Location found: ${location?.areaName || "unknown area"}. No mapped fuel stop within ${Math.round(STATION_SEARCH_RADIUS_METERS / 1609)} mi.`;
+  }
+
+  function describeStation(station) {
+    if (!station) {
+      return "";
+    }
+    return [
+      station.name,
+      `${number(station.distanceMiles, 1)} mi away`,
+      station.address
+    ].filter(Boolean).join(" · ");
+  }
+
   async function getDeviceFuelLocation() {
     const position = await getCurrentPositionForFuel();
     const latitude = position.coords.latitude;
     const longitude = position.coords.longitude;
     const location = await reverseFuelLocation(latitude, longitude);
+    const stations = await fetchNearbyFuelStations(latitude, longitude);
+    const nearestStation = stations[0] || null;
     return {
       ...location,
+      // The fuel stop itself is the supplier, so use it as the area name when we found one.
+      // City/state stays available as placeName for the fallback wording.
+      areaName: nearestStation ? nearestStation.name : location.areaName,
+      placeName: location.areaName,
+      stations,
+      station: nearestStation,
+      stationAddress: nearestStation?.address || "",
+      stationDistanceMiles: nearestStation?.distanceMiles ?? null,
       accuracy: Number(position.coords.accuracy || 0),
       capturedAt: new Date().toISOString()
     };
@@ -185,8 +296,8 @@
   function matchingFuelTypes(savedType, wantedType) {
     const saved = normalizeFuelType(savedType);
     const wanted = normalizeFuelType(wantedType);
-    if (wanted === "Off-road diesel") {
-      return saved === "Off-road diesel" || saved === "Diesel";
+    if (wanted === "Red diesel") {
+      return saved === "Red diesel" || saved === "Diesel";
     }
     return saved === wanted;
   }
@@ -209,7 +320,7 @@
   function estimateStartingPrice(fuelType) {
     const type = normalizeFuelType(fuelType);
     if (type === "Gasoline") return 3.50;
-    if (type === "Off-road diesel") return 3.70;
+    if (type === "Red diesel") return 3.70;
     if (type === "DEF") return 4.00;
     if (type === "Diesel") return 3.90;
     return 0;
@@ -257,6 +368,8 @@
       const notes = document.querySelector("#fuel-price-notes");
       notes.value = [
         `Location captured ${new Date(location.capturedAt).toLocaleString()}`,
+        location.station ? `Fuel stop: ${describeStation(location.station)}` : "",
+        location.placeName ? `Area: ${location.placeName}` : "",
         location.accuracy ? `GPS accuracy about ${number(location.accuracy, 0)} meters` : "",
         nearest ? `Nearest saved ${fuelTypeLabel(type)} price was ${nearest.areaName} (${number(nearest.distanceMiles, 1)} mi away).` : ""
       ].filter(Boolean).join(" / ");
@@ -264,11 +377,11 @@
       if (nearest) {
         document.querySelector("#fuel-price-value").value = nearest.price || "";
         document.querySelector("#fuel-price-unit").value = nearest.priceUnit || getPreferredFuelUnit();
-        showFuelLocationStatus(`Location found: ${location.areaName}. Pulled nearest saved ${fuelTypeLabel(type)} price from ${nearest.areaName}. Verify before saving.`, "success");
+        showFuelLocationStatus(`${locationHeadline(location)} Pulled nearest saved ${fuelTypeLabel(type)} price from ${nearest.areaName}. Verify before saving.`, "success");
       } else {
         const estimate = estimateStartingPrice(type);
         document.querySelector("#fuel-price-value").value = estimate || "";
-        showFuelLocationStatus(`Location found: ${location.areaName}. No saved ${fuelTypeLabel(type)} price nearby yet; estimate filled as a starter. Verify the pump price before saving.`, "success");
+        showFuelLocationStatus(`${locationHeadline(location)} No saved ${fuelTypeLabel(type)} price nearby yet; estimate filled as a starter. Verify the pump price before saving.`, "success");
       }
     } catch (error) {
       showFuelLocationStatus(error.message || "Location could not be read.", "error");
@@ -296,7 +409,7 @@
       if (elements.jobFuelPriceUnit) {
         elements.jobFuelPriceUnit.value = getPreferredFuelUnit();
       }
-      updateJobFuelHint(`Location found: ${location.areaName}. No saved ${fuelTypeLabel(type)} price within ${LOCATION_MATCH_LIMIT_MILES} mi, so a starter estimate was filled. Verify the actual pump price before saving this job.`);
+      updateJobFuelHint(`${locationHeadline(location)} No saved ${fuelTypeLabel(type)} price within ${LOCATION_MATCH_LIMIT_MILES} mi, so a starter estimate was filled. Verify the actual pump price before saving this job.`);
     } catch (error) {
       updateJobFuelHint(error.message || "Location could not be read for fuel pricing.");
     }
@@ -313,6 +426,9 @@
       longitude: pendingFuelPriceLocation.longitude,
       city: pendingFuelPriceLocation.city || "",
       state: pendingFuelPriceLocation.state || "",
+      stationName: pendingFuelPriceLocation.station?.name || "",
+      stationBrand: pendingFuelPriceLocation.station?.brand || "",
+      stationAddress: pendingFuelPriceLocation.stationAddress || "",
       locationAccuracy: pendingFuelPriceLocation.accuracy || null,
       locationCapturedAt: pendingFuelPriceLocation.capturedAt || new Date().toISOString(),
       source: "device-location"

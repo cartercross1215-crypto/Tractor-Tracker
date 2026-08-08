@@ -21,7 +21,7 @@
             <label>Area or supplier<input id="fuel-price-area" type="text" placeholder="Local diesel stop" required /></label>
             <label>Fuel type<select id="fuel-price-type">
               <option>Diesel</option>
-              <option>Off-road diesel</option>
+              <option>Red diesel</option>
               <option>Gasoline</option>
               <option>DEF</option>
               <option>Other</option>
