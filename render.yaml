@@ -12,9 +12,9 @@ services:
       - key: TRACTOR_TRACKER_PUBLIC_URL
         value: https://tractor-tracker-yboz.onrender.com
       - key: TRACTOR_TRACKER_SUPPORT_EMAIL
-        value: tractortracker.support@gmail.com
+        value: support@tractortracker.farm
       - key: ADMIN_EMAILS
-        value: tractortracker.support@gmail.com
+        value: support@tractortracker.farm
       - key: DATABASE_URL
         sync: false
       - key: RESEND_API_KEY
