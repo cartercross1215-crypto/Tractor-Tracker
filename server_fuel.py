@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run Tractor Tracker with password-reset diagnostics and fuel-price/mode/estimate add-ons."""
+"""Run Tractor Tracker with password-reset diagnostics and add-on scripts."""
 import json
 import time
 import urllib.error
@@ -52,7 +52,7 @@ def _fetch_overpass_stations(latitude, longitude):
                 headers={
                     "Content-Type": "application/x-www-form-urlencoded",
                     # Overpass asks for a contactable User-Agent.
-                    "User-Agent": "TractorTracker/1.0 (tractortracker.support@gmail.com)",
+                    "User-Agent": "TractorTracker/1.0 (support@tractortracker.farm)",
                 },
             )
             with urllib.request.urlopen(request, timeout=25) as response:
@@ -118,6 +118,7 @@ def fuel_price_do_get(self):
             '  <script src="fuel-location-prices.js?v=1"></script>',
             '  <script src="mode-branding.js?v=1"></script>',
             '  <script src="estimate-builder.js?v=1"></script>',
+            '  <script src="quick-log.js?v=1"></script>',
         ])
         if "fuel-prices.js" not in content:
             content = content.replace('  <script src="app.js?v=34"></script>', '  <script src="app.js?v=34"></script>\n' + add_on_scripts)
@@ -130,6 +131,8 @@ def fuel_price_do_get(self):
                 content = content.replace('  <script src="fuel-location-prices.js?v=1"></script>', '  <script src="fuel-location-prices.js?v=1"></script>\n  <script src="mode-branding.js?v=1"></script>')
             if "estimate-builder.js" not in content:
                 content = content.replace('  <script src="mode-branding.js?v=1"></script>', '  <script src="mode-branding.js?v=1"></script>\n  <script src="estimate-builder.js?v=1"></script>')
+            if "quick-log.js" not in content:
+                content = content.replace('  <script src="estimate-builder.js?v=1"></script>', '  <script src="estimate-builder.js?v=1"></script>\n  <script src="quick-log.js?v=1"></script>')
         body = content.encode("utf-8")
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/html; charset=utf-8")
