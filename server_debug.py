@@ -127,6 +127,8 @@ def patched_send_resend_email(self, to_address, subject, text_body, request_id=N
         headers={
             "Authorization": f"Bearer {resend_api_key}",
             "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "TractorTracker/1.0 (+https://tractor-tracker-yboz.onrender.com)",
         },
         method="POST",
     )
