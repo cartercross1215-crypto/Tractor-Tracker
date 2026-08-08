@@ -89,7 +89,7 @@ Example Resend settings:
 
 Example support-admin setting:
 
-- `ADMIN_EMAILS=tractortracker.support@gmail.com`
+- `ADMIN_EMAILS=support@tractortracker.farm`
 
 Accounts listed in `ADMIN_EMAILS` can use the Support Tools panel after logging in. They can review, download, and replace customer cloud data for support purposes, and those actions are recorded in the server audit table.
 
