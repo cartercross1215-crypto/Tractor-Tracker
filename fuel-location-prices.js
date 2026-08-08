@@ -168,73 +168,38 @@
     }
   }
 
-  // Nearby fuel stations come from OpenStreetMap via Overpass: free, no API key, no
-  // billing account. OSM carries station name/brand/address but NOT pump prices, so the
-  // farmer still confirms the price -- this just tells them which stop they are standing at
-  // instead of guessing a town name. Two mirrors because the main one throttles.
-  const OVERPASS_ENDPOINTS = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter"
-  ];
+  // Nearby fuel stations come from OpenStreetMap (free, no API key). The browser cannot
+  // call Overpass directly -- the request fails even though Overpass sends
+  // Access-Control-Allow-Origin: * -- so this goes through our own /api/fuel-stations,
+  // which fetches and caches server-side. OSM carries station name/brand/address but NOT
+  // pump prices, so the farmer still confirms the price; this only tells them which stop
+  // they are standing at instead of guessing a town name.
   const STATION_SEARCH_RADIUS_METERS = 8000;
   const STATION_RESULT_LIMIT = 8;
 
-  function stationDisplayName(tags = {}) {
-    return tags.name || tags.brand || tags.operator || "Unnamed fuel stop";
-  }
-
-  function stationAddress(tags = {}) {
-    const street = [tags["addr:housenumber"], tags["addr:street"]].filter(Boolean).join(" ");
-    const town = [tags["addr:city"], tags["addr:state"]].filter(Boolean).join(", ");
-    return [street, town].filter(Boolean).join(", ");
-  }
-
   async function fetchNearbyFuelStations(latitude, longitude) {
-    const query = `[out:json][timeout:20];nwr["amenity"="fuel"](around:${STATION_SEARCH_RADIUS_METERS},${latitude},${longitude});out center tags ${STATION_RESULT_LIMIT * 4};`;
     const origin = { latitude, longitude };
-
-    for (const endpoint of OVERPASS_ENDPOINTS) {
-      try {
-        const response = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ data: query }).toString(),
-          cache: "no-store"
-        });
-        if (!response.ok) {
-          continue;
-        }
-        const payload = await response.json();
-        const stations = (payload.elements || [])
-          .map((element) => {
-            const stationLat = element.lat ?? element.center?.lat;
-            const stationLon = element.lon ?? element.center?.lon;
-            if (!Number.isFinite(stationLat) || !Number.isFinite(stationLon)) {
-              return null;
-            }
-            const tags = element.tags || {};
-            return {
-              name: stationDisplayName(tags),
-              brand: tags.brand || "",
-              address: stationAddress(tags),
-              hasDiesel: tags["fuel:diesel"] === "yes",
-              latitude: stationLat,
-              longitude: stationLon,
-              distanceMiles: distanceMilesBetween(origin, { latitude: stationLat, longitude: stationLon })
-            };
-          })
-          .filter(Boolean)
-          .sort((a, b) => a.distanceMiles - b.distanceMiles)
-          .slice(0, STATION_RESULT_LIMIT);
-        if (stations.length) {
-          return stations;
-        }
-      } catch (error) {
-        // Offline, throttled, or blocked -- fall through to the next mirror, then to
-        // city/state naming. Station lookup is a convenience, never a hard requirement.
+    try {
+      const url = new URL("/api/fuel-stations", window.location.origin);
+      url.searchParams.set("latitude", latitude);
+      url.searchParams.set("longitude", longitude);
+      const response = await fetch(url.toString(), { cache: "no-store" });
+      if (!response.ok) {
+        return [];
       }
+      const payload = await response.json();
+      return (payload.stations || [])
+        .map((station) => ({
+          ...station,
+          distanceMiles: distanceMilesBetween(origin, station)
+        }))
+        .sort((a, b) => a.distanceMiles - b.distanceMiles)
+        .slice(0, STATION_RESULT_LIMIT);
+    } catch (error) {
+      // Offline or the add-on server is not running -- fall back to city/state naming.
+      // Station lookup is a convenience, never a hard requirement.
+      return [];
     }
-    return [];
   }
 
   function locationHeadline(location) {
