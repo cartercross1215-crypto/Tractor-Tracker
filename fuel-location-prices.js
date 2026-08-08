@@ -215,28 +215,37 @@
       if (!response.ok) {
         return null;
       }
-      const payload = await response.json();
-      return Number.isFinite(Number(payload.price)) ? payload : null;
+      return await response.json();
     } catch (error) {
       return null;
     }
   }
 
+  // Only Red diesel and DEF genuinely have no published average. Diesel and Gasoline do --
+  // if we could not fetch one it is because the lookup is not configured or failed, and
+  // saying "no published average exists" for Diesel would be plainly untrue.
+  const FUEL_TYPES_WITH_NO_PUBLIC_AVERAGE = ["Red diesel", "DEF", "Other"];
+
   // Returns { price, note } -- an EIA regional average when one exists, otherwise the
   // built-in starter estimate. Never throws; the farmer confirms the number either way.
   async function suggestedStartingPrice(location, fuelType) {
-    const regional = await fetchRegionalPrice(location?.state, fuelType);
-    if (regional) {
+    const type = normalizeFuelType(fuelType);
+    const label = fuelTypeLabel(type);
+    const regional = await fetchRegionalPrice(location?.state, type);
+
+    if (regional && Number.isFinite(Number(regional.price))) {
       const week = regional.period ? ` (week of ${regional.period})` : "";
       return {
-        price: regional.price,
-        note: `Filled with the EIA ${fuelTypeLabel(fuelType)} average for your region${week}.`
+        price: Number(regional.price),
+        note: `Filled with the EIA ${label} average for your region${week}.`
       };
     }
-    return {
-      price: estimateStartingPrice(fuelType),
-      note: `No published average exists for ${fuelTypeLabel(fuelType)}, so a starter estimate was filled.`
-    };
+
+    const note = FUEL_TYPES_WITH_NO_PUBLIC_AVERAGE.includes(type)
+      ? `${label} has no published average -- it is a contract or delivery price -- so a rough starter figure was filled.`
+      : `The ${label} regional average could not be loaded right now, so a rough starter figure was filled.`;
+
+    return { price: estimateStartingPrice(type), note };
   }
 
   function locationHeadline(location) {
@@ -403,7 +412,9 @@
       }
       const suggestion = await suggestedStartingPrice(location, type);
       if (elements.jobFuelPriceArea) {
-        elements.jobFuelPriceArea.value = "";
+        // We know which fuel stop they are at -- name it instead of leaving the field
+        // blank. Falls back to city/state, and only ends up empty if neither is known.
+        elements.jobFuelPriceArea.value = location.station?.name || location.placeName || "";
       }
       if (elements.jobFuelPrice) {
         elements.jobFuelPrice.value = suggestion.price || "";

@@ -42,7 +42,7 @@ def _fetch_overpass_stations(latitude, longitude):
     different from 'this area genuinely has no fuel stations' -- Overpass rate-limits
     per IP, so failures are common and must not be cached as a real empty result."""
     query = (
-        f"[out:json][timeout:20];"
+        f"[out:json][timeout:10];"
         f'nwr["amenity"="fuel"](around:{STATION_SEARCH_RADIUS_METERS},{latitude},{longitude});'
         f"out center tags {STATION_RESULT_LIMIT * 4};"
     )
@@ -59,7 +59,7 @@ def _fetch_overpass_stations(latitude, longitude):
                     "User-Agent": "TractorTracker/1.0 (support@tractortracker.farm)",
                 },
             )
-            with urllib.request.urlopen(request, timeout=25) as response:
+            with urllib.request.urlopen(request, timeout=12) as response:
                 payload = json.loads(response.read().decode("utf-8"))
         except (urllib.error.URLError, ValueError, TimeoutError, OSError):
             continue
@@ -279,7 +279,7 @@ def fuel_price_do_get(self):
             # sw.js is cache-first with no revalidation, so this version MUST be bumped on
             # every change to the file or returning users keep the old copy forever.
             # v=2: station lookup moved onto /api/fuel-stations. v=3: EIA regional prices.
-            '  <script src="fuel-location-prices.js?v=3"></script>',
+            '  <script src="fuel-location-prices.js?v=4"></script>',
             '  <script src="mode-branding.js?v=1"></script>',
             '  <script src="estimate-builder.js?v=1"></script>',
             '  <script src="estimate-mode-guard.js?v=1"></script>',
