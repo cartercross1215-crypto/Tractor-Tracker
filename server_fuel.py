@@ -37,6 +37,9 @@ def _station_address(tags):
 
 
 def _fetch_overpass_stations(latitude, longitude):
+    """Return (stations, ok). ok is False when every endpoint failed, which is very
+    different from 'this area genuinely has no fuel stations' -- Overpass rate-limits
+    per IP, so failures are common and must not be cached as a real empty result."""
     query = (
         f"[out:json][timeout:20];"
         f'nwr["amenity"="fuel"](around:{STATION_SEARCH_RADIUS_METERS},{latitude},{longitude});'
@@ -76,9 +79,9 @@ def _fetch_overpass_stations(latitude, longitude):
                 "latitude": station_lat,
                 "longitude": station_lon,
             })
-        if stations:
-            return stations
-    return []
+        # A parsed response is authoritative even when empty (genuinely nothing mapped here).
+        return stations, True
+    return [], False
 
 
 def handle_fuel_stations(self):
@@ -100,9 +103,20 @@ def handle_fuel_stations(self):
         self.send_json({"stations": cached[1], "cached": True})
         return
 
-    stations = _fetch_overpass_stations(latitude, longitude)
-    _station_cache[key] = (now, stations)
-    self.send_json({"stations": stations, "cached": False})
+    stations, ok = _fetch_overpass_stations(latitude, longitude)
+    if ok:
+        _station_cache[key] = (now, stations)
+        self.send_json({"stations": stations, "cached": False})
+        return
+
+    # Overpass failed (rate limit, timeout, outage). Never cache that as an empty area.
+    # Serve an expired entry if we have one -- stale station names are still correct,
+    # stations do not move -- otherwise tell the client the lookup was unavailable so it
+    # falls back to city/state naming instead of claiming there are no stations nearby.
+    if cached:
+        self.send_json({"stations": cached[1], "cached": True, "stale": True})
+        return
+    self.send_json({"stations": [], "unavailable": True})
 
 
 def fuel_price_do_get(self):
