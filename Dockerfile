@@ -18,4 +18,4 @@ RUN mkdir -p /data
 EXPOSE 10000
 VOLUME ["/data"]
 
-CMD ["python3", "server.py"]
+CMD ["python3", "server_debug.py"]
