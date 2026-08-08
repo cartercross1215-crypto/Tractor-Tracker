@@ -769,7 +769,7 @@ function buildFeedbackMailto() {
     "Attach one here if helpful."
   ].join("\n");
 
-  return `mailto:tractortracker.support@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  return `mailto:support@tractortracker.farm?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 function showPlanUpgrade(featureName) {
