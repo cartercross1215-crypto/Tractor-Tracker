@@ -20,7 +20,7 @@ services:
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM
-        sync: false
+        value: "Tractor Tracker <support@tractortracker.farm>"
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
