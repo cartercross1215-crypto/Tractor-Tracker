@@ -115,7 +115,10 @@ def fuel_price_do_get(self):
         content = index_path.read_text(encoding="utf-8")
         add_on_scripts = "\n".join([
             '  <script src="fuel-prices.js?v=2"></script>',
-            '  <script src="fuel-location-prices.js?v=1"></script>',
+            # v=2: station lookup moved off direct Overpass calls onto /api/fuel-stations.
+            # sw.js is cache-first with no revalidation, so the version MUST change or
+            # returning users keep the old file forever.
+            '  <script src="fuel-location-prices.js?v=2"></script>',
             '  <script src="mode-branding.js?v=1"></script>',
             '  <script src="estimate-builder.js?v=1"></script>',
             '  <script src="quick-log.js?v=1"></script>',
