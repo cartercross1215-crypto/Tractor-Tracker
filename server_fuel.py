@@ -268,6 +268,7 @@ def fuel_price_do_get(self):
             '  <script src="estimate-mode-guard.js?v=1"></script>',
             '  <script src="quick-log.js?v=1"></script>',
             '  <script src="season-planner.js?v=1"></script>',
+            '  <script src="today-dashboard.js?v=1"></script>',
         ])
         if "fuel-prices.js" not in content:
             content = content.replace('  <script src="app.js?v=34"></script>', '  <script src="app.js?v=34"></script>\n' + add_on_scripts)
@@ -286,6 +287,8 @@ def fuel_price_do_get(self):
                 content = content.replace('  <script src="estimate-builder.js?v=1"></script>', '  <script src="estimate-builder.js?v=1"></script>\n  <script src="quick-log.js?v=1"></script>')
             if "season-planner.js" not in content:
                 content = content.replace('  <script src="quick-log.js?v=1"></script>', '  <script src="quick-log.js?v=1"></script>\n  <script src="season-planner.js?v=1"></script>')
+            if "today-dashboard.js" not in content:
+                content = content.replace('  <script src="season-planner.js?v=1"></script>', '  <script src="season-planner.js?v=1"></script>\n  <script src="today-dashboard.js?v=1"></script>')
         body = content.encode("utf-8")
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/html; charset=utf-8")
