@@ -134,7 +134,6 @@ def handle_fuel_stations(self):
 # Red diesel and DEF are deliberately absent: no public source publishes either. Red diesel
 # comes off a bulk delivery invoice at a contract price, which the farmer already enters
 # manually and which is exact rather than an average.
-EIA_API_KEY = os.environ.get("EIA_API_KEY", "").strip()
 EIA_ENDPOINT = "https://api.eia.gov/v2/petroleum/pri/gnd/data/"
 EIA_PRICE_CACHE_SECONDS = 24 * 60 * 60
 
@@ -173,6 +172,24 @@ _EIA_SERIES_TEMPLATE = {
 _eia_price_cache = {}
 
 
+def eia_api_key():
+    """Read at call time, not import time, so setting the variable takes effect on the
+    next request rather than requiring the process to be restarted."""
+    return os.environ.get("EIA_API_KEY", "").strip()
+
+
+def eia_status_summary():
+    """Boot diagnostic in the same style as the existing Resend/SMTP lines. Prints only
+    names and lengths, never a value, so it is safe in the Render log."""
+    key = eia_api_key()
+    related = sorted(name for name in os.environ if "EIA" in name.upper())
+    return (
+        "EIA fuel prices "
+        f"key_set={'yes' if key else 'no'} key_length={len(key)} "
+        f"env_names_containing_EIA={related or 'none'}"
+    )
+
+
 def _padd_region_for_state(state):
     text = str(state or "").strip()
     if not text:
@@ -183,7 +200,7 @@ def _padd_region_for_state(state):
 
 def _fetch_eia_price(series_id):
     query = urllib.parse.urlencode({
-        "api_key": EIA_API_KEY,
+        "api_key": eia_api_key(),
         "frequency": "weekly",
         "data[0]": "value",
         "facets[series][0]": series_id,
@@ -220,7 +237,7 @@ def handle_fuel_price(self):
         # Red diesel and DEF have no public price source, by design.
         self.send_json({"unavailable": True, "reason": "no public price source for this fuel"})
         return
-    if not EIA_API_KEY:
+    if not eia_api_key():
         self.send_json({"unavailable": True, "reason": "EIA_API_KEY is not set"})
         return
 
@@ -303,4 +320,5 @@ def fuel_price_do_get(self):
 app.TractorTrackerHandler.do_GET = fuel_price_do_get
 
 if __name__ == "__main__":
+    print(eia_status_summary(), flush=True)
     app.main()
