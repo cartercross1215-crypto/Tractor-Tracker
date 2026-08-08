@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run Tractor Tracker with password-reset diagnostics and add-on scripts."""
 import json
+import os
 import time
 import urllib.error
 import urllib.parse
@@ -119,20 +120,149 @@ def handle_fuel_stations(self):
     self.send_json({"stations": [], "unavailable": True})
 
 
+# --- Regional fuel prices from the EIA ------------------------------------------------
+#
+# The EIA publishes retail diesel and gasoline averages weekly (surveyed Monday, posted
+# Tuesday ~10am ET). Free, but it needs an API key, so this whole path stays dormant
+# until EIA_API_KEY is set on the service -- without it we fall back to the same hardcoded
+# starter estimates as before. The key never reaches the browser.
+#
+# Prices are published per PADD region rather than per state, so we map the farmer's state
+# to its PADD. For an Iowa farmer that is PADD 2 (Midwest), which is far closer to reality
+# than a single national number.
+#
+# Red diesel and DEF are deliberately absent: no public source publishes either. Red diesel
+# comes off a bulk delivery invoice at a contract price, which the farmer already enters
+# manually and which is exact rather than an average.
+EIA_API_KEY = os.environ.get("EIA_API_KEY", "").strip()
+EIA_ENDPOINT = "https://api.eia.gov/v2/petroleum/pri/gnd/data/"
+EIA_PRICE_CACHE_SECONDS = 24 * 60 * 60
+
+_PADD_BY_STATE = {}
+for _padd, _states in {
+    "R10": "CT DE DC FL GA ME MD MA NH NJ NY NC PA RI SC VT VA WV",
+    "R20": "IL IN IA KS KY MI MN MO NE ND OH OK SD TN WI",
+    "R30": "AL AR LA MS NM TX",
+    "R40": "CO ID MT UT WY",
+    "R50": "AK AZ CA HI NV OR WA",
+}.items():
+    for _code in _states.split():
+        _PADD_BY_STATE[_code] = _padd
+
+_STATE_CODE_BY_NAME = {
+    "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR", "california": "CA",
+    "colorado": "CO", "connecticut": "CT", "delaware": "DE", "district of columbia": "DC",
+    "florida": "FL", "georgia": "GA", "hawaii": "HI", "idaho": "ID", "illinois": "IL",
+    "indiana": "IN", "iowa": "IA", "kansas": "KS", "kentucky": "KY", "louisiana": "LA",
+    "maine": "ME", "maryland": "MD", "massachusetts": "MA", "michigan": "MI",
+    "minnesota": "MN", "mississippi": "MS", "missouri": "MO", "montana": "MT",
+    "nebraska": "NE", "nevada": "NV", "new hampshire": "NH", "new jersey": "NJ",
+    "new mexico": "NM", "new york": "NY", "north carolina": "NC", "north dakota": "ND",
+    "ohio": "OH", "oklahoma": "OK", "oregon": "OR", "pennsylvania": "PA",
+    "rhode island": "RI", "south carolina": "SC", "south dakota": "SD", "tennessee": "TN",
+    "texas": "TX", "utah": "UT", "vermont": "VT", "virginia": "VA", "washington": "WA",
+    "west virginia": "WV", "wisconsin": "WI", "wyoming": "WY",
+}
+
+# No 2 diesel retail, and regular gasoline retail.
+_EIA_SERIES_TEMPLATE = {
+    "diesel": "EMD_EPD2D_PTE_{region}_DPG",
+    "gasoline": "EMM_EPMR_PTE_{region}_DPG",
+}
+
+_eia_price_cache = {}
+
+
+def _padd_region_for_state(state):
+    text = str(state or "").strip()
+    if not text:
+        return "NUS"
+    code = text.upper() if len(text) == 2 else _STATE_CODE_BY_NAME.get(text.lower(), "")
+    return _PADD_BY_STATE.get(code, "NUS")
+
+
+def _fetch_eia_price(series_id):
+    query = urllib.parse.urlencode({
+        "api_key": EIA_API_KEY,
+        "frequency": "weekly",
+        "data[0]": "value",
+        "facets[series][0]": series_id,
+        "sort[0][column]": "period",
+        "sort[0][direction]": "desc",
+        "length": "1",
+    })
+    request = urllib.request.Request(
+        f"{EIA_ENDPOINT}?{query}",
+        headers={"User-Agent": "TractorTracker/1.0 (support@tractortracker.farm)"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, ValueError, TimeoutError, OSError):
+        return None
+
+    rows = (payload.get("response") or {}).get("data") or []
+    if not rows:
+        return None
+    try:
+        return {"price": float(rows[0]["value"]), "period": rows[0].get("period", "")}
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def handle_fuel_price(self):
+    params = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+    fuel_type = (params.get("fuelType", [""])[0] or "").strip().lower()
+    state = params.get("state", [""])[0]
+
+    template = _EIA_SERIES_TEMPLATE.get(fuel_type)
+    if not template:
+        # Red diesel and DEF have no public price source, by design.
+        self.send_json({"unavailable": True, "reason": "no public price source for this fuel"})
+        return
+    if not EIA_API_KEY:
+        self.send_json({"unavailable": True, "reason": "EIA_API_KEY is not set"})
+        return
+
+    region = _padd_region_for_state(state)
+    series_id = template.format(region=region)
+
+    cached = _eia_price_cache.get(series_id)
+    now = time.time()
+    if cached and now - cached[0] < EIA_PRICE_CACHE_SECONDS:
+        self.send_json({**cached[1], "region": region, "source": "EIA", "cached": True})
+        return
+
+    result = _fetch_eia_price(series_id)
+    if not result:
+        # Do not cache a failure -- same lesson as the station lookup.
+        if cached:
+            self.send_json({**cached[1], "region": region, "source": "EIA", "cached": True, "stale": True})
+            return
+        self.send_json({"unavailable": True, "reason": "EIA lookup failed"})
+        return
+
+    _eia_price_cache[series_id] = (now, result)
+    self.send_json({**result, "region": region, "source": "EIA", "cached": False})
+
+
 def fuel_price_do_get(self):
     request_path = self.path.split("?", 1)[0]
     if request_path == "/api/fuel-stations":
         handle_fuel_stations(self)
+        return
+    if request_path == "/api/fuel-price":
+        handle_fuel_price(self)
         return
     if request_path in ("/", "/index.html"):
         index_path = app.APP_DIR / "index.html"
         content = index_path.read_text(encoding="utf-8")
         add_on_scripts = "\n".join([
             '  <script src="fuel-prices.js?v=2"></script>',
-            # v=2: station lookup moved off direct Overpass calls onto /api/fuel-stations.
-            # sw.js is cache-first with no revalidation, so the version MUST change or
-            # returning users keep the old file forever.
-            '  <script src="fuel-location-prices.js?v=2"></script>',
+            # sw.js is cache-first with no revalidation, so this version MUST be bumped on
+            # every change to the file or returning users keep the old copy forever.
+            # v=2: station lookup moved onto /api/fuel-stations. v=3: EIA regional prices.
+            '  <script src="fuel-location-prices.js?v=3"></script>',
             '  <script src="mode-branding.js?v=1"></script>',
             '  <script src="estimate-builder.js?v=1"></script>',
             '  <script src="estimate-mode-guard.js?v=1"></script>',

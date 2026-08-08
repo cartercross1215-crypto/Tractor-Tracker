@@ -202,6 +202,43 @@
     }
   }
 
+  // Regional average from the EIA, via our server so the API key never reaches the
+  // browser. Only Diesel and Gasoline have a public source; Red diesel and DEF return
+  // unavailable and keep using the local starter estimate, which is correct -- red diesel
+  // is a contract price off a delivery invoice, not a published average.
+  async function fetchRegionalPrice(state, fuelType) {
+    try {
+      const url = new URL("/api/fuel-price", window.location.origin);
+      url.searchParams.set("state", state || "");
+      url.searchParams.set("fuelType", normalizeFuelType(fuelType));
+      const response = await fetch(url.toString(), { cache: "no-store" });
+      if (!response.ok) {
+        return null;
+      }
+      const payload = await response.json();
+      return Number.isFinite(Number(payload.price)) ? payload : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  // Returns { price, note } -- an EIA regional average when one exists, otherwise the
+  // built-in starter estimate. Never throws; the farmer confirms the number either way.
+  async function suggestedStartingPrice(location, fuelType) {
+    const regional = await fetchRegionalPrice(location?.state, fuelType);
+    if (regional) {
+      const week = regional.period ? ` (week of ${regional.period})` : "";
+      return {
+        price: regional.price,
+        note: `Filled with the EIA ${fuelTypeLabel(fuelType)} average for your region${week}.`
+      };
+    }
+    return {
+      price: estimateStartingPrice(fuelType),
+      note: `No published average exists for ${fuelTypeLabel(fuelType)}, so a starter estimate was filled.`
+    };
+  }
+
   function locationHeadline(location) {
     if (location?.station) {
       const address = location.station.address ? ` (${location.station.address})` : "";
@@ -344,9 +381,9 @@
         document.querySelector("#fuel-price-unit").value = nearest.priceUnit || getPreferredFuelUnit();
         showFuelLocationStatus(`${locationHeadline(location)} Pulled nearest saved ${fuelTypeLabel(type)} price from ${nearest.areaName}. Verify before saving.`, "success");
       } else {
-        const estimate = estimateStartingPrice(type);
-        document.querySelector("#fuel-price-value").value = estimate || "";
-        showFuelLocationStatus(`${locationHeadline(location)} No saved ${fuelTypeLabel(type)} price nearby yet; estimate filled as a starter. Verify the pump price before saving.`, "success");
+        const suggestion = await suggestedStartingPrice(location, type);
+        document.querySelector("#fuel-price-value").value = suggestion.price || "";
+        showFuelLocationStatus(`${locationHeadline(location)} No saved ${fuelTypeLabel(type)} price nearby yet. ${suggestion.note} Verify the pump price before saving.`, "success");
       }
     } catch (error) {
       showFuelLocationStatus(error.message || "Location could not be read.", "error");
@@ -364,17 +401,17 @@
       if (nearest && setJobFuelFromSavedPrice(nearest, location)) {
         return;
       }
-      const estimate = estimateStartingPrice(type);
+      const suggestion = await suggestedStartingPrice(location, type);
       if (elements.jobFuelPriceArea) {
         elements.jobFuelPriceArea.value = "";
       }
       if (elements.jobFuelPrice) {
-        elements.jobFuelPrice.value = estimate || "";
+        elements.jobFuelPrice.value = suggestion.price || "";
       }
       if (elements.jobFuelPriceUnit) {
         elements.jobFuelPriceUnit.value = getPreferredFuelUnit();
       }
-      updateJobFuelHint(`${locationHeadline(location)} No saved ${fuelTypeLabel(type)} price within ${LOCATION_MATCH_LIMIT_MILES} mi, so a starter estimate was filled. Verify the actual pump price before saving this job.`);
+      updateJobFuelHint(`${locationHeadline(location)} No saved ${fuelTypeLabel(type)} price within ${LOCATION_MATCH_LIMIT_MILES} mi. ${suggestion.note} Verify the actual pump price before saving this job.`);
     } catch (error) {
       updateJobFuelHint(error.message || "Location could not be read for fuel pricing.");
     }
