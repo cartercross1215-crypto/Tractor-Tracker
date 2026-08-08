@@ -1,0 +1,69 @@
+name: Apply support email update
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-support-email:
+    if: ${{ !contains(github.event.head_commit.message, 'Apply support email update') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Replace old support emails and bump cache
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              "tractortracker.support@gmail.com": "support@tractortracker.farm",
+              "carterc.issa@gmail.com": "support@tractortracker.farm",
+          }
+
+          text_files = [
+              Path("server.py"),
+              Path("index.html"),
+              Path("app.js"),
+              Path("render.yaml"),
+              Path("README.md"),
+              Path("DEPLOYMENT.md"),
+          ]
+
+          for path in text_files:
+              if not path.exists():
+                  continue
+              content = path.read_text(encoding="utf-8")
+              for old, new in replacements.items():
+                  content = content.replace(old, new)
+              path.write_text(content, encoding="utf-8")
+
+          cache_files = [Path("index.html"), Path("sw.js")]
+          for path in cache_files:
+              if not path.exists():
+                  continue
+              content = path.read_text(encoding="utf-8")
+              content = content.replace("v=33", "v=34")
+              content = content.replace("tractor-tracker-v33", "tractor-tracker-v34")
+              path.write_text(content, encoding="utf-8")
+          PY
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server.py index.html app.js render.yaml README.md DEPLOYMENT.md sw.js
+          if git diff --cached --quiet; then
+            echo "No support email changes needed."
+            exit 0
+          fi
+          git commit -m "Apply support email update"
+          git push
